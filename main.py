@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import json
 import math
 
-# Load environment variables from the .env file
+# Load environment variables from the .env file.
 load_dotenv()
 
 # --- Database Setup (SQLite) ---
