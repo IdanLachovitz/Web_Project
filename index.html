@@ -591,7 +591,32 @@
             document.getElementById('authModal').classList.remove('hidden');
         }
 
-        function closeAuthModal() { document.getElementById('authModal').classList.add('hidden'); }
+        function closeAuthModal() {
+            const uInput = document.getElementById('authUser');
+            const pInput = document.getElementById('authPass');
+            const toggleIcon = document.getElementById('passwordToggleIcon');
+
+            if (uInput) uInput.value = '';
+            if (pInput) {
+                pInput.value = '';
+                pInput.type = 'password';
+            }
+            if (toggleIcon) toggleIcon.innerText = 'visibility';
+
+            // Hide requirements on close
+            const userReq = document.getElementById('userRequirements');
+            const passReq = document.getElementById('passRequirements');
+            if (userReq) userReq.classList.add('hidden');
+            if (passReq) passReq.classList.add('hidden');
+
+            // Always reset back to login mode on close
+            authMode = 'login';
+            document.getElementById('authTitle').innerText = 'Welcome Back';
+            document.getElementById('authSubmitBtn').innerText = 'Login';
+            document.getElementById('authToggleText').innerText = "Don't have an account?";
+
+            document.getElementById('authModal').classList.add('hidden');
+        }
 
         function togglePasswordVisibility() {
             const passInput = document.getElementById('authPass');
@@ -610,19 +635,56 @@
             document.getElementById('authTitle').innerText = authMode === 'login' ? 'Welcome Back' : 'Create Account';
             document.getElementById('authSubmitBtn').innerText = authMode === 'login' ? 'Login' : 'Register';
             document.getElementById('authToggleText').innerText = authMode === 'login' ? "Don't have an account?" : "Already have an account?";
+
+            // Toggle requirements visibility
+            const userReq = document.getElementById('userRequirements');
+            const passReq = document.getElementById('passRequirements');
+            if (userReq) userReq.classList.toggle('hidden', authMode === 'login');
+            if (passReq) passReq.classList.toggle('hidden', authMode === 'login');
+
+            // Clear inputs and reset visibility when toggling modes
+            const uInput = document.getElementById('authUser');
+            const pInput = document.getElementById('authPass');
+            const toggleIcon = document.getElementById('passwordToggleIcon');
+
+            if (uInput) uInput.value = '';
+            if (pInput) {
+                pInput.value = '';
+                pInput.type = 'password';
+            }
+            if (toggleIcon) toggleIcon.innerText = 'visibility';
         }
 
         async function submitAuth() {
             const u = document.getElementById('authUser').value;
             const p = document.getElementById('authPass').value;
-            if (!u || !p) return;
 
-            if (u.length < 3) {
-                alert("Username must be at least 3 characters long.");
+            if (!u && !p) {
+                showTempMessage("Please enter both a username and a password.");
+                return;
+            } else if (!u) {
+                showTempMessage("Please enter your username.");
+                return;
+            } else if (!p) {
+                showTempMessage("Please enter your password.");
                 return;
             }
-            if (p.length > 72) {
-                alert("Password cannot be longer than 72 characters.");
+
+            if (u.length < 3) {
+                showTempMessage("Username must be at least 3 characters long."); // Min 3
+                return;
+            }
+            if (u.length > 15) {
+                showTempMessage("Username cannot be longer than 15 characters."); // Max 15
+                return;
+            }
+
+            if (p.length < 8) {
+                showTempMessage("Password must be at least 8 characters long."); // Min 8
+                return;
+            }
+            if (p.length > 20) {
+                showTempMessage("Password cannot be longer than 20 characters."); // Max 20
                 return;
             }
 
@@ -655,13 +717,13 @@
                         closeAuthModal();
                         loadHome();
                     } else {
-                        alert("Registered! Please login.");
+                        showTempMessage("Registered! Please login.");
                         toggleAuthMode();
                     }
-                } else { alert(data.detail); }
+                } else { showTempMessage(data.detail); }
             } catch (e) {
                 console.error("Auth Error:", e);
-                alert("Auth Error: " + e.message);
+                showTempMessage("Auth Error: " + e.message);
             }
         }
 
@@ -683,10 +745,14 @@
                 btn.querySelector('span').innerText = isInLibrary ? 'library_add_check' : 'library_add';
             });
             const modalBtn = document.getElementById('modalLibBtn');
-            if (modalBtn && currentModalGameId === gameId) {
+            if (modalBtn && currentModalGameId == gameId) {
                 modalBtn.innerText = isInLibrary ? 'REMOVE FROM LIBRARY' : 'ADD TO LIBRARY';
                 modalBtn.classList.toggle('bg-red-600', isInLibrary);
+                modalBtn.classList.toggle('hover:bg-red-700', isInLibrary);
+                modalBtn.classList.toggle('shadow-red-900/40', isInLibrary);
                 modalBtn.classList.toggle('bg-purple-600', !isInLibrary);
+                modalBtn.classList.toggle('hover:bg-purple-700', !isInLibrary);
+                modalBtn.classList.toggle('shadow-purple-900/40', !isInLibrary);
             }
         }
 
@@ -875,7 +941,7 @@
                                     ${pricesHtml}
                                 </div>
                             </div>
-                            <button id="modalLibBtn" onclick="toggleLibrary(${game.id})" class="w-full py-4 ${isInLibrary ? 'bg-red-600 hover:bg-red-700' : 'bg-purple-600 hover:bg-purple-700'} text-white font-bold rounded-xl transition-all shadow-lg shadow-purple-900/40">
+                            <button id="modalLibBtn" onclick="toggleLibrary(${game.id})" class="w-full py-4 ${isInLibrary ? 'bg-red-600 hover:bg-red-700 shadow-red-900/40' : 'bg-purple-600 hover:bg-purple-700 shadow-purple-900/40'} text-white font-bold rounded-xl transition-all shadow-lg">
                                 ${isInLibrary ? 'REMOVE FROM LIBRARY' : 'ADD TO LIBRARY'}
                             </button>
                         </div>
@@ -1194,13 +1260,15 @@
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Username</label>
-                    <input id="authUser" type="text" maxlength="20" onkeyup="if(event.key==='Enter') submitAuth()"
+                    <input id="authUser" type="text" maxlength="15" onkeyup="if(event.key==='Enter') submitAuth()"
                         class="w-full bg-white/5 border-white/10 rounded-xl text-white focus:border-purple-600 focus:ring-0">
+                    <p id="userRequirements" class="text-[10px] text-gray-500 mt-1 hidden">Username must be 3-15
+                        characters</p>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Password</label>
                     <div class="relative">
-                        <input id="authPass" type="password" maxlength="72"
+                        <input id="authPass" type="password" maxlength="20"
                             onkeyup="if(event.key==='Enter') submitAuth()"
                             class="w-full bg-white/5 border-white/10 rounded-xl text-white focus:border-purple-600 focus:ring-0 pr-12">
                         <button type="button" onclick="togglePasswordVisibility()"
@@ -1208,6 +1276,8 @@
                             <span id="passwordToggleIcon" class="material-symbols-outlined">visibility</span>
                         </button>
                     </div>
+                    <p id="passRequirements" class="text-[10px] text-gray-500 mt-1 hidden">Password must be 8-20
+                        characters</p>
                 </div>
                 <button id="authSubmitBtn" onclick="submitAuth()"
                     class="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all mt-4">Sign
