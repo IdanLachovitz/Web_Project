@@ -2957,7 +2957,7 @@
         ],
         "summary": "Resident Evil 4 is a remake of the 2005 original Resident Evil 4 reimagined for 2023 to bring state-of-the-art survival horror. Resident Evil 4 preserves the essence of the original game, while introducing modernized gameplay, a reimagined storyline,\nand vividly detailed graphics to make this the latest survival horror game where life and death, terror and catharsis intersect.",
         "total_rating": 92.47565455287976,
-        "total_rating_count": 629,
+        "total_rating_count": 630,
         "videos": [
             {
                 "id": 76765,
@@ -3806,8 +3806,8 @@
             }
         ],
         "summary": "Sequel to the acclaimed Portal (2007), Portal 2 pits the protagonist of the original game, Chell, and her new robot friend, Wheatley, against more puzzles conceived by GLaDOS, an A.I. with the sole purpose of testing the Portal Gun's mechanics and taking revenge on Chell for the events of Portal. As a result of several interactions and revelations, Chell once again pushes to escape Aperture Science Labs.",
-        "total_rating": 91.8863401854181,
-        "total_rating_count": 4317,
+        "total_rating": 91.88637284044016,
+        "total_rating_count": 4318,
         "videos": [
             {
                 "id": 432,
@@ -7234,8 +7234,8 @@
             }
         ],
         "summary": "Resident Evil 2 is a remake of 1998's Resident Evil 2. The game was not developed with the intent of improving the original, but rather a reimagining of the original story with redesigned maps, characters and story elements. Gameplay mechanics are more similar to Resident Evil 7: Biohazard though with the use of an over-the-shoulder camera.",
-        "total_rating": 90.16173740120084,
-        "total_rating_count": 1376,
+        "total_rating": 90.16168787081267,
+        "total_rating_count": 1377,
         "videos": [
             {
                 "id": 20626,
@@ -7516,67 +7516,6 @@
         ]
     },
     {
-        "id": 1520,
-        "cover": {
-            "id": 92205,
-            "url": "//images.igdb.com/igdb/image/upload/t_thumb/co1z59.jpg"
-        },
-        "first_release_date": 1252713600,
-        "genres": [
-            {
-                "id": 12,
-                "name": "Role-playing (RPG)"
-            },
-            {
-                "id": 16,
-                "name": "Turn-based strategy (TBS)"
-            },
-            {
-                "id": 31,
-                "name": "Adventure"
-            }
-        ],
-        "name": "Pokémon SoulSilver Version",
-        "platforms": [
-            {
-                "id": 20,
-                "abbreviation": "NDS",
-                "name": "Nintendo DS"
-            }
-        ],
-        "screenshots": [
-            {
-                "id": 24156,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/poikvxac3ktlsunuvtph.jpg"
-            },
-            {
-                "id": 24157,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/khwap8bgh3pvpawfotye.jpg"
-            },
-            {
-                "id": 24158,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/vduq22yygtj6pldllpwe.jpg"
-            },
-            {
-                "id": 21991,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/q5x8llmxyjpk0voqmrxb.jpg"
-            },
-            {
-                "id": 24159,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/tuje1di9abjmt69pvcjt.jpg"
-            }
-        ],
-        "summary": "Pokemon HeartGold Version and Pokemon SoulSilver Version return players to the scenic Johto region first introduced in the beloved original Pokemon Gold and Pokemon Silver games nearly a decade ago. The richly detailed adventure of Pokemon Gold and Pokemon Silver is now enhanced for the Nintendo DS and Nintendo DSi systems with updated graphics and sound, as well as new touch-screen features and a host of surprises. Pokemon HeartGold Version and Pokemon SoulSilver Version bring dozens of Pokemon characters back into the limelight for a new Pokemon generation - and longtime fans - to catch, train and battle.",
-        "total_rating": 89.97421562582232,
-        "total_rating_count": 388,
-        "videos": [
-            {
-                "id": 31427,
-                "video_id": "M3zpC6Zfqh8"
-            }
-        ]
-    },
-    {
         "id": 185246,
         "cover": {
             "id": 304947,
@@ -7668,6 +7607,67 @@
             {
                 "id": 96454,
                 "video_id": "nCcG3mnH4Uk"
+            }
+        ]
+    },
+    {
+        "id": 1520,
+        "cover": {
+            "id": 92205,
+            "url": "//images.igdb.com/igdb/image/upload/t_thumb/co1z59.jpg"
+        },
+        "first_release_date": 1252713600,
+        "genres": [
+            {
+                "id": 12,
+                "name": "Role-playing (RPG)"
+            },
+            {
+                "id": 16,
+                "name": "Turn-based strategy (TBS)"
+            },
+            {
+                "id": 31,
+                "name": "Adventure"
+            }
+        ],
+        "name": "Pokémon SoulSilver Version",
+        "platforms": [
+            {
+                "id": 20,
+                "abbreviation": "NDS",
+                "name": "Nintendo DS"
+            }
+        ],
+        "screenshots": [
+            {
+                "id": 24156,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/poikvxac3ktlsunuvtph.jpg"
+            },
+            {
+                "id": 24157,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/khwap8bgh3pvpawfotye.jpg"
+            },
+            {
+                "id": 24158,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/vduq22yygtj6pldllpwe.jpg"
+            },
+            {
+                "id": 21991,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/q5x8llmxyjpk0voqmrxb.jpg"
+            },
+            {
+                "id": 24159,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/tuje1di9abjmt69pvcjt.jpg"
+            }
+        ],
+        "summary": "Pokemon HeartGold Version and Pokemon SoulSilver Version return players to the scenic Johto region first introduced in the beloved original Pokemon Gold and Pokemon Silver games nearly a decade ago. The richly detailed adventure of Pokemon Gold and Pokemon Silver is now enhanced for the Nintendo DS and Nintendo DSi systems with updated graphics and sound, as well as new touch-screen features and a host of surprises. Pokemon HeartGold Version and Pokemon SoulSilver Version bring dozens of Pokemon characters back into the limelight for a new Pokemon generation - and longtime fans - to catch, train and battle.",
+        "total_rating": 89.9712597548243,
+        "total_rating_count": 389,
+        "videos": [
+            {
+                "id": 31427,
+                "video_id": "M3zpC6Zfqh8"
             }
         ]
     },
