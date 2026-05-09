@@ -349,7 +349,7 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     token = get_access_token()
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    query = f'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where id = ({",".join(map(str, game_ids))});'
+    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where id = ({",".join(map(str, game_ids))});'
     
     try:
         response = requests.post(url, headers=headers, data=query)
@@ -383,7 +383,7 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
             
             genres = list(set([g for game in lib_data for g in game.get('genres', [])]))
             if genres:
-                rec_query = f'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where genres = ({",".join(map(str, genres[:3]))}) & total_rating > 80; sort total_rating desc; limit 16;'
+                rec_query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where genres = ({",".join(map(str, genres[:3]))}) & total_rating > 80; sort total_rating desc; limit 16;'
                 response = requests.post(url, headers=headers, data=rec_query)
                 data = response.json()
                 if data: return process_game_data(data)
@@ -391,7 +391,7 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
             pass
 
     # Fallback for guest or empty library
-    fallback_query = 'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where total_rating > 85; sort total_rating desc; limit 16;'
+    fallback_query = 'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where total_rating > 85; sort total_rating desc; limit 16;'
     response = requests.post(url, headers=headers, data=fallback_query)
     return process_game_data(response.json())
 
@@ -404,7 +404,7 @@ def search_game(game_name: str):
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
     # Increased limit to 100 to support frontend pagination (16 per page)
-    query = f'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; search "{game_name}"; limit 100;'
+    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; search "{game_name}"; limit 100;'
 
     try:
         response = requests.post(url, headers=headers, data=query)
