@@ -127,9 +127,12 @@
         let currentPage = 1;
         const gamesPerPage = 16;
         let currentContext = 'home'; // 'home', 'search', 'category'
+        let currentPlatformFilter = 'all';
+        let currentGenreFilter = 'all';
         let priceCache = {}; // Global store for prices: gameId -> all_prices
         let userLibraryIds = new Set();
         let currentModalGameId = null;
+        let gameIdToRemove = null;
 
         function renderSkeletons(count = gamesPerPage) {
             const skeleton = `
@@ -177,6 +180,10 @@
             });
             const target = document.getElementById(sectionId);
             if (target) target.classList.remove('hidden');
+
+            // Reset scroll position of the main container when switching views
+            const mainContent = document.querySelector('main');
+            if (mainContent) mainContent.scrollTop = 0;
         }
 
         function setActiveNav(navId) {
@@ -198,13 +205,24 @@
             const token = localStorage.getItem('gs_user_id'); // Use user_id as token
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
+            const homeContent = document.getElementById('homeContent');
+            if (!token) {
+                if (homeContent) homeContent.classList.add('hidden');
+                return;
+            }
+            if (homeContent) homeContent.classList.remove('hidden');
+
             const container = document.getElementById('homeNewReleases');
 
             if (categoryDataCache['home']) {
                 allCategoryGames = categoryDataCache['home'];
-                cachedGames = allCategoryGames.slice(0, 16);
-                container.innerHTML = cachedGames.map(game => createGameCard(game)).join('');
-                loadPricesForCurrentView(cachedGames);
+                if (allCategoryGames.length === 0 && token && currentContext === 'home') {
+                    container.innerHTML = '<div class="col-span-full py-10 text-center text-gray-500 uppercase tracking-widest text-xs">Please add games to your library to see personalized recommendations</div>';
+                } else {
+                    cachedGames = allCategoryGames.slice(0, 16);
+                    container.innerHTML = cachedGames.map(game => createGameCard(game)).join('');
+                    loadPricesForCurrentView(cachedGames);
+                }
                 return;
             }
 
@@ -216,12 +234,9 @@
                 categoryDataCache['home'] = games;
                 allCategoryGames = games;
 
-                // If recommendations are empty and user is logged in, show library empty message
-                // Otherwise, if not logged in or no personalized recs, it will show default top-rated
-                const user = localStorage.getItem('gs_user');
-                if (games.length === 0 && user && currentContext === 'home') {
-                    // This message is more appropriate if the user is logged in and their library is empty
-                    container.innerHTML = '<div class="col-span-full py-10 text-center text-gray-500 uppercase tracking-widest text-xs">Your library is empty</div>';
+                // If recommendations are empty and user is logged in, show prompt to add games
+                if (games.length === 0 && token && currentContext === 'home') {
+                    container.innerHTML = '<div class="col-span-full py-10 text-center text-gray-500 uppercase tracking-widest text-xs">Please add games to your library to see personalized recommendations</div>';
                     return;
                 }
 
@@ -292,6 +307,7 @@
         }
 
         function filterByPlatform(platformId) {
+            currentPlatformFilter = platformId;
             document.querySelectorAll('.platform-filter-btn').forEach(btn => {
                 btn.classList.remove('bg-purple-600', 'text-white', 'border-purple-500');
                 btn.classList.add('bg-white/5', 'text-gray-500', 'border-white/10');
@@ -301,38 +317,87 @@
                 activeBtn.classList.add('bg-purple-600', 'text-white', 'border-purple-500');
                 activeBtn.classList.remove('bg-white/5', 'text-gray-500', 'border-white/10');
             }
+            applyFilters();
+        }
 
-            if (platformId === 'all') {
-                cachedGames = [...allCategoryGames];
-            } else {
-                cachedGames = allCategoryGames.filter(game => {
-                    if (!game.platforms) return false;
-                    return game.platforms.some(p => {
-                        const name = (p.name || '').toLowerCase();
-                        const abbr = (p.abbreviation || '').toLowerCase();
-                        if (platformId === 'pc') return name.includes('pc') || name.includes('windows') || name.includes('linux') || name.includes('mac') || abbr.includes('pc') || abbr.includes('win') || abbr.includes('mac');
-                        if (platformId === 'playstation') return name.includes('playstation') || abbr.includes('ps');
-                        if (platformId === 'xbox') return name.includes('xbox') || name.includes('series') || abbr.includes('xb') || abbr.includes('xone');
-                        if (platformId === 'nintendo') return name.includes('nintendo') || name.includes('switch') || abbr.includes('switch');
-                        if (platformId === 'mobile') return name.includes('ios') || name.includes('android') || name.includes('mobile') || abbr.includes('ios') || abbr.includes('and');
-                        if (platformId === 'vr') return name.includes('vr') || name.includes('oculus') || name.includes('quest') || name.includes('vive') || name.includes('index') || abbr.includes('vr');
-                        return false;
-                    });
-                });
+        function renderGenreFilters() {
+            const container = document.getElementById('genreFilters');
+            const genres = [
+                { id: 'all', name: 'All', value: 'all' },
+                { id: 'rpg', name: 'RPG', value: 'Role-playing (RPG)' },
+                { id: 'racing', name: 'Racing', value: 'Racing' },
+                { id: 'sport', name: 'Sport', value: 'Sport' },
+                { id: 'shooter', name: 'Shooter', value: 'Shooter' },
+                { id: 'strategy', name: 'Strategy', value: 'Strategy' }
+            ];
+
+            container.innerHTML = genres.map(g => `
+                <button onclick="filterByGenre('${g.value}', '${g.id}')" 
+                        id="genre-filter-${g.id}"
+                        class="genre-filter-btn px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border border-white/10 ${g.id === 'all' ? 'bg-purple-600 text-white border-purple-500' : 'bg-white/5 text-gray-500 hover:text-white hover:bg-white/10'}">
+                    ${g.name}
+                </button>
+            `).join('');
+        }
+
+        function filterByGenre(genreValue, genreId) {
+            currentGenreFilter = genreValue;
+            document.querySelectorAll('.genre-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-purple-600', 'text-white', 'border-purple-500');
+                btn.classList.add('bg-white/5', 'text-gray-500', 'border-white/10');
+            });
+            const activeBtn = document.getElementById(`genre-filter-${genreId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-purple-600', 'text-white', 'border-purple-500');
+                activeBtn.classList.remove('bg-white/5', 'text-gray-500', 'border-white/10');
             }
+            applyFilters();
+        }
 
-            currentPage = 1;
+        function applyFilters() {
+            cachedGames = allCategoryGames.filter(game => {
+                let platformMatch = true;
+                if (currentPlatformFilter !== 'all') {
+                    if (!game.platforms) platformMatch = false;
+                    else {
+                        platformMatch = game.platforms.some(p => {
+                            const name = (p.name || '').toLowerCase();
+                            const abbr = (p.abbreviation || '').toLowerCase();
+                            const platformId = currentPlatformFilter;
+                            if (platformId === 'pc') return name.includes('pc') || name.includes('windows') || name.includes('linux') || name.includes('mac') || abbr.includes('pc') || abbr.includes('win') || abbr.includes('mac');
+                            if (platformId === 'playstation') return name.includes('playstation') || abbr.includes('ps');
+                            if (platformId === 'xbox') return name.includes('xbox') || name.includes('series') || abbr.includes('xb') || abbr.includes('xone');
+                            if (platformId === 'nintendo') return name.includes('nintendo') || name.includes('switch') || abbr.includes('switch');
+                            if (platformId === 'mobile') return name.includes('ios') || name.includes('android') || name.includes('mobile') || abbr.includes('ios') || abbr.includes('and');
+                            if (platformId === 'vr') return name.includes('vr') || name.includes('oculus') || name.includes('quest') || name.includes('vive') || name.includes('index') || abbr.includes('vr');
+                            return false;
+                        });
+                    }
+                }
+
+                let genreMatch = true;
+                if (currentGenreFilter !== 'all') {
+                    if (!game.genres) genreMatch = false;
+                    else {
+                        genreMatch = game.genres.some(g => g.name === currentGenreFilter);
+                    }
+                }
+
+                return platformMatch && genreMatch;
+            });
+
             const container = document.getElementById('resultsContainer');
             if (cachedGames.length === 0) {
-                container.innerHTML = `<div class="col-span-full py-20 text-center text-gray-500 uppercase tracking-widest text-xs">No games found for this platform.</div>`;
+                container.innerHTML = `<div class="col-span-full py-20 text-center text-gray-500 uppercase tracking-widest text-xs">No games found for the selected filters.</div>`;
                 document.getElementById('gridPagination').classList.add('hidden');
             } else {
+                currentPage = 1;
                 renderPage('resultsContainer', 'gridPagination');
             }
         }
 
         async function loadCategory(id, title, subtitle, navId) {
-            if (id === 'library' && !localStorage.getItem('gs_user_id')) {
+            if ((id === 'library' || id === 'recommendations') && !localStorage.getItem('gs_user_id')) {
                 openLoginRequiredModal();
                 loadHome();
                 return;
@@ -345,6 +410,7 @@
             document.getElementById('gridSubtitle').innerText = subtitle;
             const filterContainer = document.getElementById('platformFilters');
             filterContainer.classList.add('hidden');
+            document.getElementById('genreFilters').classList.add('hidden');
 
             const token = localStorage.getItem('gs_user_id'); // Use user_id as token
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -358,9 +424,12 @@
                 currentPage = 1;
 
                 // Ensure filters are visible for categories that support them
-                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming') {
+                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming' || id === 'recommendations') {
                     renderPlatformFilters();
+                    renderGenreFilters();
                     filterContainer.classList.remove('hidden');
+                    document.getElementById('genreFilters').classList.remove('hidden');
+                    currentGenreFilter = 'all';
                     filterByPlatform('all');
                 } else if (cachedGames.length > 0) {
                     renderPage('resultsContainer', 'gridPagination');
@@ -373,7 +442,7 @@
             container.innerHTML = renderSkeletons();
 
             try {
-                const endpoint = id === 'library' ? '/library' : `/category/${id}`;
+                const endpoint = id === 'library' ? '/library' : (id === 'recommendations' ? '/recommendations' : `/category/${id}`);
                 const response = await fetch(endpoint, { headers });
                 const games = await response.json();
                 categoryDataCache[id] = games;
@@ -381,9 +450,12 @@
                 cachedGames = games;
                 currentPage = 1;
 
-                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming') {
+                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming' || id === 'recommendations') {
                     renderPlatformFilters();
+                    renderGenreFilters();
                     filterContainer.classList.remove('hidden');
+                    document.getElementById('genreFilters').classList.remove('hidden');
+                    currentGenreFilter = 'all';
                     filterByPlatform('all');
                 } else if (cachedGames.length === 0) {
                     container.innerHTML = '<div class="col-span-full py-20 text-center text-gray-500 uppercase tracking-widest text-xs">No entries found.</div>';
@@ -519,6 +591,7 @@
             const rating = (game.total_rating !== undefined && game.total_rating !== null) ? game.total_rating + '%' : 'N/A';
             const cover = game.cover_url || 'https://images.unsplash.com/photo-1580234811497-9df7fd2f357e?q=80&w=2067&auto=format&fit=crop';
             const genre = game.genres && game.genres.length > 0 ? game.genres[0].name : 'Game';
+            const developer = game.involved_companies && game.involved_companies.find(c => c.developer) ? game.involved_companies.find(c => c.developer).company.name : 'Unknown';
             const gameDataJson = JSON.stringify(game).replace(/'/g, "&#39;");
             const isInLibrary = userLibraryIds.has(game.id);
 
@@ -545,7 +618,9 @@
                     </div>
                     <div class="p-4 flex flex-col flex-1 justify-between gap-3">
                         <div class="space-y-2">
+                        <span class="text-[10px] font-black text-purple-500 uppercase tracking-widest block mb-0.5">${genre}</span>
                             <p class="text-white font-bold truncate text-sm leading-tight">${game.name}</p>
+                        <p class="text-[11px] text-gray-400 font-medium truncate -mt-1">${developer}</p>
                             <div class="flex flex-wrap gap-1">
                                 ${(game.platforms || []).map(p => `
                                     <span class="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[9px] text-gray-400 font-bold">
@@ -589,6 +664,7 @@
             if (toggleIcon) toggleIcon.innerText = 'visibility';
 
             document.getElementById('authModal').classList.remove('hidden');
+            validatePassword(''); // Reset UI
         }
 
         function closeAuthModal() {
@@ -608,6 +684,8 @@
             const passReq = document.getElementById('passRequirements');
             if (userReq) userReq.classList.add('hidden');
             if (passReq) passReq.classList.add('hidden');
+
+            document.getElementById('passwordChecklist').classList.add('hidden');
 
             // Always reset back to login mode on close
             authMode = 'login';
@@ -641,6 +719,7 @@
             const passReq = document.getElementById('passRequirements');
             if (userReq) userReq.classList.toggle('hidden', authMode === 'login');
             if (passReq) passReq.classList.toggle('hidden', authMode === 'login');
+            document.getElementById('passwordChecklist').classList.toggle('hidden', authMode === 'login');
 
             // Clear inputs and reset visibility when toggling modes
             const uInput = document.getElementById('authUser');
@@ -653,6 +732,35 @@
                 pInput.type = 'password';
             }
             if (toggleIcon) toggleIcon.innerText = 'visibility';
+            validatePassword('');
+        }
+
+        function validatePassword(val) {
+            const rules = [
+                { id: 'rule-length', test: val.length >= 8 },
+                { id: 'rule-special', test: /[0-9]|[^a-zA-Z0-9]/.test(val) },
+                { id: 'rule-small', test: /[a-z]/.test(val) },
+                { id: 'rule-capital', test: /[A-Z]/.test(val) }
+            ];
+
+            let allMet = true;
+            rules.forEach(rule => {
+                const el = document.getElementById(rule.id);
+                const icon = el.querySelector('span');
+                if (rule.test) {
+                    el.classList.remove('text-gray-500');
+                    el.classList.add('text-purple-500');
+                    icon.innerText = 'check_circle';
+                    icon.style.fontVariationSettings = "'FILL' 1";
+                } else {
+                    el.classList.add('text-gray-500');
+                    el.classList.remove('text-purple-500');
+                    icon.innerText = 'circle';
+                    icon.style.fontVariationSettings = "'FILL' 0";
+                    allMet = false;
+                }
+            });
+            return allMet;
         }
 
         async function submitAuth() {
@@ -685,6 +793,11 @@
             }
             if (p.length > 20) {
                 showTempMessage("Password cannot be longer than 20 characters."); // Max 20
+                return;
+            }
+
+            if (authMode === 'register' && !validatePassword(p)) {
+                showTempMessage("Please meet all password requirements before registering.");
                 return;
             }
 
@@ -782,7 +895,15 @@
             }
         }
 
-        async function removeFromLibrary(gameId) {
+        function removeFromLibrary(gameId) {
+            gameIdToRemove = gameId;
+            document.getElementById('removeConfirmModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        async function confirmRemoveFromLibrary() {
+            if (gameIdToRemove === null) return;
+            const gameId = gameIdToRemove;
             const userId = localStorage.getItem('gs_user_id');
             if (!userId) return;
             const res = await fetch(`/library/remove/${gameId}`, {
@@ -796,7 +917,14 @@
                 delete categoryDataCache['library'];
                 delete categoryDataCache['home'];
                 if (currentContext === 'category' && document.getElementById('gridTitle').innerText === 'YOUR LIBRARY') loadLibrary();
+                closeRemoveModal();
             }
+        }
+
+        function closeRemoveModal() {
+            document.getElementById('removeConfirmModal').classList.add('hidden');
+            document.body.style.overflow = '';
+            gameIdToRemove = null;
         }
 
         function updateUserDisplay() {
@@ -927,6 +1055,10 @@
                                     <p class="text-white font-semibold">${releaseDate}</p>
                                 </div>
                                 <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Genre</p>
+                                    <p class="text-white font-semibold">${genre}</p>
+                                </div>
+                                <div class="col-span-2">
                                     <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Developer</p>
                                     <p class="text-white font-semibold">${developer}</p>
                                 </div>
@@ -956,6 +1088,7 @@
 
         function loadLibrary() { loadCategory('library', 'YOUR LIBRARY', 'Manage your saved games and collections.', 'navLibrary'); }
         function loadNewReleases() { loadCategory('new-releases', 'NEW RELEASES', 'The latest titles hitting the market right now.', 'navNewReleases'); }
+        function loadRecommendedAll() { loadCategory('recommendations', 'RECOMMENDED FOR YOU', 'Personalized suggestions based on your library.', 'navHome'); }
         function loadTopRated() { loadCategory('top', 'TOP RATED', 'Highest rated.', 'navTopRated'); }
         function loadTrends() { loadCategory('trends', 'TRENDING NOW', 'What the gaming community is buzzing about today.', 'navTrends'); }
         function loadUpcoming() { loadCategory('upcoming', 'UPCOMING', 'Future hits to keep on your radar.', 'navUpcoming'); }
@@ -1152,7 +1285,7 @@
                                 You</h2>
                             <button
                                 class="text-purple-400 hover:text-purple-300 text-sm font-bold flex items-center gap-1 group"
-                                onclick="loadNewReleases()">View All <span
+                                onclick="loadRecommendedAll()">View All <span
                                     class="material-symbols-outlined group-hover:translate-x-1 transition-transform">chevron_right</span></button>
                         </div>
                         <div class="responsive-grid" id="homeNewReleases">
@@ -1202,10 +1335,12 @@
                 <section class="hidden" id="results-grid">
                     <h1 class="text-3xl sm:text-4xl md:text-[2.5rem] font-black text-white mb-2 tracking-tighter uppercase"
                         id="gridTitle"></h1>
-                    <div
-                        class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 border-b border-white/5 pb-6">
+                    <div class="flex flex-col gap-4 mb-8 border-b border-white/5 pb-6">
                         <p class="text-gray-400 font-inter max-w-2xl" id="gridSubtitle"></p>
-                        <div id="platformFilters" class="flex flex-wrap gap-2 hidden"></div>
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div id="platformFilters" class="flex flex-wrap gap-2 hidden"></div>
+                            <div id="genreFilters" class="flex flex-wrap gap-2 hidden"></div>
+                        </div>
                     </div>
                     <div class="responsive-grid" id="resultsContainer"></div>
                     <div class="hidden mt-8" id="gridPagination"></div>
@@ -1250,7 +1385,7 @@
     <div class="fixed inset-0 z-[110] hidden" id="authModal">
         <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" onclick="closeAuthModal()"></div>
         <div
-            class="relative w-full max-w-md mx-auto my-20 glass-modal border border-white/10 rounded-2xl overflow-hidden p-8">
+            class="relative w-full max-w-sm mx-auto mt-5 mb-5 glass-modal border border-white/10 rounded-2xl overflow-hidden p-4">
             <div class="flex justify-between items-center mb-8">
                 <h2 class="text-2xl font-black text-white italic tracking-tighter" id="authTitle">Welcome Back</h2>
                 <button onclick="closeAuthModal()" class="text-gray-400 hover:text-white"><span
@@ -1271,7 +1406,7 @@
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-2">Password</label>
                     <div class="relative">
                         <input id="authPass" type="password" maxlength="20"
-                            onkeyup="if(event.key==='Enter') submitAuth()"
+                            onkeyup="if(event.key==='Enter') submitAuth()" oninput="validatePassword(this.value)"
                             class="w-full bg-white/5 border-white/10 rounded-xl text-white focus:border-purple-600 focus:ring-0 pr-12">
                         <button type="button" onclick="togglePasswordVisibility()"
                             class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white">
@@ -1280,6 +1415,29 @@
                     </div>
                     <p id="passRequirements" class="text-[10px] text-gray-500 mt-1 hidden">Password must be 8-20
                         characters</p>
+                    <!-- Password Checklist -->
+                    <ul id="passwordChecklist" class="grid grid-cols-1 gap-2 pl-1 mt-4 hidden">
+                        <li id="rule-length"
+                            class="flex items-center gap-3 text-[10px] font-bold text-gray-500 transition-all duration-300">
+                            <span class="material-symbols-outlined text-[16px]">circle</span>
+                            <span class="tracking-wide uppercase opacity-80">At least 8 characters</span>
+                        </li>
+                        <li id="rule-special"
+                            class="flex items-center gap-3 text-[10px] font-bold text-gray-500 transition-all duration-300">
+                            <span class="material-symbols-outlined text-[16px]">circle</span>
+                            <span class="tracking-wide uppercase opacity-80">Special character or digit</span>
+                        </li>
+                        <li id="rule-small"
+                            class="flex items-center gap-3 text-[10px] font-bold text-gray-500 transition-all duration-300">
+                            <span class="material-symbols-outlined text-[16px]">circle</span>
+                            <span class="tracking-wide uppercase opacity-80">1 small letter</span>
+                        </li>
+                        <li id="rule-capital"
+                            class="flex items-center gap-3 text-[10px] font-bold text-gray-500 transition-all duration-300">
+                            <span class="material-symbols-outlined text-[16px]">circle</span>
+                            <span class="tracking-wide uppercase opacity-80">1 capital letter</span>
+                        </li>
+                    </ul>
                 </div>
                 <button id="authSubmitBtn" onclick="submitAuth()"
                     class="w-full py-4 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl transition-all mt-4">Sign
@@ -1347,6 +1505,32 @@
         <div
             class="bg-black/80 backdrop-blur-sm p-8 rounded-xl border border-white/10 text-white text-lg font-bold text-center">
             <p id="tempMessageText"></p>
+        </div>
+    </div>
+
+    <!-- Remove Game Confirmation Modal -->
+    <div class="fixed inset-0 z-[110] hidden" id="removeConfirmModal">
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-sm" onclick="closeRemoveModal()"></div>
+        <div
+            class="relative w-full max-w-md mx-auto my-20 glass-modal border border-white/10 rounded-2xl overflow-hidden p-8">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-2xl font-black text-white italic tracking-tighter">Remove from Library</h2>
+                <button onclick="closeRemoveModal()" class="text-gray-400 hover:text-white"><span
+                        class="material-symbols-outlined">close</span></button>
+            </div>
+            <p class="text-gray-400 text-base mb-6">
+                Are you sure you want to remove this game from your library?
+            </p>
+            <div class="space-y-4">
+                <button onclick="confirmRemoveFromLibrary()"
+                    class="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all">
+                    Remove
+                </button>
+                <button onclick="closeRemoveModal()"
+                    class="w-full py-4 bg-white/5 hover:bg-white/10 text-gray-300 font-bold rounded-xl transition-all">
+                    Cancel
+                </button>
+            </div>
         </div>
     </div>
 </body>

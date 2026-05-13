@@ -19,6 +19,9 @@ import math
 # Load environment variables from the .env file.
 load_dotenv()
 
+# Global Priority for choosing the "Main" genre across the site
+GENRE_PRIORITY = ["Racing", "Shooter", "Role-playing (RPG)", "Fighting", "Sport", "Arcade", "Simulator", "Adventure", "Action"]
+
 # --- Database Setup (SQLite) ---
 DATABASE_FILE = "gamesense.db"
 
@@ -262,8 +265,19 @@ def read_root():
     except FileNotFoundError:
         return "<h1>Error: index.html not found in project directory.</h1>"
 
+def is_password_strong(password: str) -> bool:
+    if len(password) < 8: return False
+    if not any(c.islower() for c in password): return False
+    if not any(c.isupper() for c in password): return False
+    # Matches frontend: Special character or digit
+    if not any(c.isdigit() or not c.isalnum() for c in password): return False
+    return True
+
 @app.post("/register")
 def register(request: AuthRequest):
+    if not is_password_strong(request.password):
+        raise HTTPException(status_code=400, detail="Password does not meet complexity requirements")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM users WHERE username = ?", (request.username,))
@@ -349,7 +363,7 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     token = get_access_token()
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where id = ({",".join(map(str, game_ids))});'
+    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; where id = ({",".join(map(str, game_ids))});'
     
     try:
         response = requests.post(url, headers=headers, data=query)
@@ -359,41 +373,93 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
 
 @app.get("/recommendations")
 def get_recommendations(current_user_id: Optional[int] = Depends(get_current_user_id)):
+    if current_user_id is None:
+        return []
+
     token = get_access_token()
     if not token:
         raise HTTPException(status_code=500, detail="Authentication failed.")
 
-    url = "https://api.igdb.com/v4/games"
-    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
+    user_library_ids = [item["game_id"] for item in cursor.fetchall()]
+    conn.close()
 
-    user_library_ids = []
-    if current_user_id:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
-        items = cursor.fetchall()
-        conn.close()
-        user_library_ids = [item["game_id"] for item in items]
+    if not user_library_ids:
+        return []
 
-    if user_library_ids:
-        try:
-            library_query = f'fields genres; where id = ({",".join(map(str, user_library_ids))});'
-            lib_res = requests.post(url, headers=headers, data=library_query)
-            lib_data = lib_res.json()
+    try:
+        url = "https://api.igdb.com/v4/games"
+        headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+        ids_str = ",".join(map(str, user_library_ids))
+        
+        lib_res = requests.post(url, headers=headers, data=f'fields genres.name; where id = ({ids_str});')
+        lib_data = lib_res.json()
+        
+        unique_main_genres = set()
+        for game in lib_data:
+            genres = game.get('genres', [])
+            if not genres: continue
             
-            genres = list(set([g for game in lib_data for g in game.get('genres', [])]))
-            if genres:
-                rec_query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where genres = ({",".join(map(str, genres[:3]))}) & total_rating > 80; sort total_rating desc; limit 16;'
-                response = requests.post(url, headers=headers, data=rec_query)
-                data = response.json()
-                if data: return process_game_data(data)
-        except Exception:
-            pass
+            best_genre = None
+            min_prio = len(GENRE_PRIORITY)
+            for g in genres:
+                name = g.get('name', "")
+                prio = GENRE_PRIORITY.index(name) if name in GENRE_PRIORITY else len(GENRE_PRIORITY)
+                if prio < min_prio:
+                    min_prio = prio
+                    best_genre = g
+            
+            target = best_genre if best_genre else genres[0]
+            gid = target.get('id') if isinstance(target, dict) else target
+            if gid:
+                unique_main_genres.add(gid)
 
-    # Fallback for guest or empty library
-    fallback_query = 'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where total_rating > 85; sort total_rating desc; limit 16;'
-    response = requests.post(url, headers=headers, data=fallback_query)
-    return process_game_data(response.json())
+        if not unique_main_genres:
+            return []
+
+        genre_filter = ",".join(map(str, unique_main_genres))
+        rec_query = (
+            f"fields name, summary, total_rating, total_rating_count, first_release_date, "
+            f"cover.url, platforms.name, platforms.abbreviation, genres.name, "
+            f"screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; "
+            f"where genres = ({genre_filter}) & id != ({ids_str}) & "
+            f"total_rating != 70 & total_rating_count > 200 & cover != null; "
+            f"limit 500;"
+        )
+        
+        response = requests.post(url, headers=headers, data=rec_query)
+        raw_games = response.json()
+        if not raw_games:
+            return []
+
+        filtered_games = []
+        for game in raw_games:
+            game_genres = game.get('genres', [])
+            if not game_genres: continue
+            
+            current_best_genre = None
+            current_min_prio = len(GENRE_PRIORITY)
+            for g in game_genres:
+                name = g.get('name', "")
+                prio = GENRE_PRIORITY.index(name) if name in GENRE_PRIORITY else len(GENRE_PRIORITY)
+                if prio < current_min_prio:
+                    current_min_prio = prio
+                    current_best_genre = g
+            
+            final_main_genre = current_best_genre if current_best_genre else game_genres[0]
+            main_gid = final_main_genre.get('id') if isinstance(final_main_genre, dict) else final_main_genre
+            
+            if main_gid in unique_main_genres:
+                filtered_games.append(game)
+
+        filtered_games.sort(key=calculate_top_100, reverse=True)
+        return process_game_data(filtered_games[:100])
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
 
 @app.get("/search/{game_name}")
 def search_game(game_name: str):
@@ -404,7 +470,7 @@ def search_game(game_name: str):
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
     # Increased limit to 100 to support frontend pagination (16 per page)
-    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; search "{game_name}"; limit 100;'
+    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; search "{game_name}"; limit 100;'
 
     try:
         response = requests.post(url, headers=headers, data=query)
@@ -427,7 +493,7 @@ def get_games_by_category(cat_id: str):
     base_fields = (
         "fields name, summary, total_rating, total_rating_count, first_release_date, "
         "cover.url, platforms.name, platforms.abbreviation, genres.name, "
-        "screenshots.url, videos.video_id;"
+        "screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name;"
     )
 
     if cat_id == "new-releases":
@@ -491,6 +557,13 @@ def calculate_trending_games(game):
 # Global instance to ensure lru_cache persists across requests
 global_price_service = GamePriceService(CLIENT_ID, CLIENT_SECRET, ITAD_API_KEY)
 
+def get_genre_priority(g):
+    name = g.get('name') if isinstance(g, dict) else ""
+    try:
+        return GENRE_PRIORITY.index(name)
+    except ValueError:
+        return len(GENRE_PRIORITY) # Non-priority genres go to the end
+
 def process_game_data(data):
     if not isinstance(data, list):
         print(f"IGDB Data Error (Expected list, got): {data}")
@@ -498,6 +571,10 @@ def process_game_data(data):
         
     # Process Metadata (Visuals, Ratings, Dates) only
     for game in data:
+        # Reorder genres based on priority list. Higher priority genres move to index 0.
+        if "genres" in game and isinstance(game["genres"], list) and len(game["genres"]) > 0:
+            game["genres"].sort(key=get_genre_priority)
+
         if "cover" in game:
             game["cover_url"] = "https:" + game["cover"]["url"].replace("t_thumb", "t_cover_big")
         else:
