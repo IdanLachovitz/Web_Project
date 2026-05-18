@@ -20,10 +20,24 @@ import math
 load_dotenv()
 
 # Global Priority for choosing the "Main" genre across the site
-GENRE_PRIORITY = ["Racing", "Shooter", "Role-playing (RPG)", "Fighting", "Sport", "Arcade", "Simulator", "Adventure", "Action"]
+GENRE_PRIORITY = ["Shooter", "Racing", "Role-playing (RPG)", "Fighting", "Sport", "Arcade", "Simulator", "Adventure", "Action"]
 
 # --- Database Setup (SQLite) ---
 DATABASE_FILE = "gamesense.db"
+
+# --- Server-Side Caching ---
+GLOBAL_DATA_CACHE = {} # Stores (data, timestamp)
+
+def get_cached_data(key, ttl=1800):
+    """Retrieve data from cache if it hasn't expired (default 30 mins)."""
+    if key in GLOBAL_DATA_CACHE:
+        data, ts = GLOBAL_DATA_CACHE[key]
+        if time.time() - ts < ttl:
+            return data
+    return None
+
+def set_cached_data(key, data):
+    GLOBAL_DATA_CACHE[key] = (data, time.time())
 
 def get_db_connection():
     conn = sqlite3.connect(DATABASE_FILE)
@@ -75,7 +89,6 @@ def get_current_user_id(authorization: Optional[str] = Header(None)):
 # Twitch/IGDB Credentials
 CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
-ITAD_API_KEY = os.getenv("ITAD_API_KEY")
 
 app = FastAPI()
 
@@ -87,147 +100,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class GamePriceService:
-    def __init__(self, client_id, client_secret, itad_api_key=None):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.itad_api_key = itad_api_key
-        
-        # CheapShark API Endpoints
-        self.igdb_url = "https://api.igdb.com/v4/games"
-        self.cheapshark_games_url = "https://www.cheapshark.com/api/1.0/games"
-        self.cheapshark_deals_url = "https://www.cheapshark.com/api/1.0/deals"
-        self.headers = {"User-Agent": "GameSense/1.0"}
-
-
-    def _get_token(self):
-        auth_url = f"https://id.twitch.tv/oauth2/token?client_id={self.client_id}&client_secret={self.client_secret}&grant_type=client_credentials"
-        try:
-            r = requests.post(auth_url, headers=self.headers, timeout=5)
-            return r.json().get("access_token")
-        except: return None
-
-    def _fetch_itad_price(self, game_name):
-        """Fetches prices from IsThereAnyDeal for multiple platforms."""
-        platform_prices = {"PC": "N/A", "PlayStation": "N/A", "Xbox": "N/A"}
-        if not self.itad_api_key:
-            return platform_prices
-
-        try:
-            # 1. Search for Game UUID
-            search_url = f"https://api.isthereanydeal.com/games/search/v1?key={self.itad_api_key}&title={game_name}"
-            search_res = requests.get(search_url, timeout=5)
-            search_data = search_res.json()
-            
-            results = search_data.get("results", []) if isinstance(search_data, dict) else search_data
-            if not results:
-                return platform_prices
-            
-            game_id = results[0].get('uuid') or results[0].get('id')
-            
-            # 2. Get Prices for that UUID
-            price_url = f"https://api.isthereanydeal.com/games/prices/v2?key={self.itad_api_key}&uuids={game_id}&nondeals=1"
-            price_res = requests.get(price_url, timeout=5)
-            price_data = price_res.json()
-            
-            # Extract deals list
-            deals = price_data.get("data", {}).get(game_id, {}).get("list", [])
-            
-            for deal in deals:
-                shop_name = deal.get("shop", {}).get("name", "").lower()
-                price_val = deal.get("price_new") or deal.get("price_old")
-                
-                if price_val is not None:
-                    formatted_price = f"${float(price_val):.2f}"
-                    
-                    # Simple shop-to-platform mapping
-                    if any(x in shop_name for x in ["steam", "gog", "epic", "humble"]):
-                        if platform_prices["PC"] == "N/A": platform_prices["PC"] = formatted_price
-                    elif "playstation" in shop_name:
-                        if platform_prices["PlayStation"] == "N/A": platform_prices["PlayStation"] = formatted_price
-                    elif "xbox" in shop_name or "microsoft" in shop_name:
-                        if platform_prices["Xbox"] == "N/A": platform_prices["Xbox"] = formatted_price
-
-        except Exception as e:
-            print(f"ITAD Error for {game_name}: {e}")
-        
-        return platform_prices
-
-    @functools.lru_cache(maxsize=128)
-    def fetchPrices(self, game_name):
-        # Start with ITAD for multi-platform coverage
-        prices = self._fetch_itad_price(game_name)
-        
-        # Fallback to CheapShark for PC if ITAD failed to find a PC price
-        if prices["PC"] == "N/A":
-            pc_price = self._fetch_cheapshark_pc_price(game_name)
-            if pc_price != "N/A":
-                prices["PC"] = pc_price
-                
-        return {"game": game_name, "live_prices": prices}
-
-    def _fetch_cheapshark_pc_price(self, game_name):
-        """Fallback helper for PC prices using CheapShark."""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        query_name = re.sub(r'\s*[\(\[].*?[\)\]]', '', game_name).strip()
-        try:
-            search_res = requests.get(
-                self.cheapshark_games_url, 
-                params={"title": query_name}, 
-                headers=headers, 
-                timeout=5
-            )
-            
-            if search_res.status_code == 200:
-                search_data = search_res.json()
-                if not search_data:
-                    return "N/A" # Return N/A if no game found on CheapShark
-                
-                # Get the internal CheapShark ID for the best match
-                cheapshark_game_id = search_data[0].get('gameID')
-
-                lookup_res = requests.get(
-                    self.cheapshark_games_url, 
-                    params={"id": cheapshark_game_id}, 
-                    headers=headers, 
-                    timeout=5
-                )
-                lookup_res.raise_for_status() # Raise an exception for HTTP errors
-                
-                if lookup_res.status_code == 200:
-                    game_info = lookup_res.json()
-                    
-                    # Initialize pc_price_str for this scope
-                    pc_price_str = "N/A"
-
-                    # The price for the overall cheapest deal is usually here:
-                    cheapest_price = game_info.get('cheapestPriceEver', {}).get('price')
-                    
-                    # Alternatively, check current active deals list
-                    deals = game_info.get('deals', [])
-                    if deals:
-                        # Find the lowest price among current active deals
-                        current_min = min(float(d['price']) for d in deals if 'price' in d)
-                        pc_price_str = f"${current_min:.2f}"
-                    elif cheapest_price:
-                        pc_price_str = f"${float(cheapest_price):.2f}"
-                    return pc_price_str
-
-        except requests.exceptions.RequestException as e:
-            print(f"DEBUG CheapShark Request Error for {game_name}: {e}")
-        except Exception as e:
-            print(f"DEBUG CheapShark Processing Error for {game_name}: {e}")
-        return "N/A" # Default return if anything fails
-
-@app.get("/api/v1/game-price-check")
-def api_price_check(q: str):
-    """
-    Exposes the GamePriceService via a clean API endpoint.
-    """
-    return global_price_service.fetchPrices(q)
 
 # Global cache for the Twitch token
 _token_cache = {"token": None, "expires_at": 0}
@@ -319,6 +191,11 @@ def add_to_library(game_id: int, current_user_id: Optional[int] = Depends(get_cu
     cursor.execute("INSERT INTO library_items (user_id, game_id) VALUES (?, ?)", (current_user_id, game_id))
     conn.commit()
     conn.close()
+
+    # Invalidate server-side caches for this user
+    GLOBAL_DATA_CACHE.pop(f"lib_full_{current_user_id}", None)
+    GLOBAL_DATA_CACHE.pop(f"recs_{current_user_id}", None)
+
     return {"message": "Added to library"}
 
 @app.delete("/library/remove/{game_id}")
@@ -331,6 +208,11 @@ def remove_from_library(game_id: int, current_user_id: Optional[int] = Depends(g
     cursor.execute("DELETE FROM library_items WHERE user_id = ? AND game_id = ?", (current_user_id, game_id))
     conn.commit()
     conn.close()
+
+    # Invalidate server-side caches for this user
+    GLOBAL_DATA_CACHE.pop(f"lib_full_{current_user_id}", None)
+    GLOBAL_DATA_CACHE.pop(f"recs_{current_user_id}", None)
+
     return {"message": "Removed from library"}
 
 @app.get("/library/ids")
@@ -349,6 +231,11 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     if current_user_id is None:
         return []
     
+    # Try to get from personal cache
+    cache_key = f"lib_full_{current_user_id}"
+    cached = get_cached_data(cache_key, ttl=300) # 5 min TTL for library
+    if cached: return cached
+
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
@@ -367,7 +254,9 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     
     try:
         response = requests.post(url, headers=headers, data=query)
-        return process_game_data(response.json())
+        res = process_game_data(response.json())
+        set_cached_data(cache_key, res)
+        return res
     except Exception:
         return []
 
@@ -375,6 +264,11 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
 def get_recommendations(current_user_id: Optional[int] = Depends(get_current_user_id)):
     if current_user_id is None:
         return []
+
+    # Personal Recommendation Cache
+    cache_key = f"recs_{current_user_id}"
+    cached = get_cached_data(cache_key, ttl=600) # 10 min TTL
+    if cached: return cached
 
     token = get_access_token()
     if not token:
@@ -455,7 +349,9 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
                 filtered_games.append(game)
 
         filtered_games.sort(key=calculate_top_100, reverse=True)
-        return process_game_data(filtered_games[:100])
+        res = process_game_data(filtered_games[:100])
+        set_cached_data(cache_key, res)
+        return res
 
     except Exception as e:
         print(f"Error: {e}")
@@ -483,6 +379,11 @@ def search_game(game_name: str):
 @app.get("/category/{cat_id}")
 def get_games_by_category(cat_id: str):
     token = get_access_token()
+
+    cache_key = f"cat_{cat_id}"
+    cached = get_cached_data(cache_key)
+    if cached: return cached
+
     if not token:
         raise HTTPException(status_code=500, detail="Authentication failed.")
 
@@ -528,10 +429,13 @@ def get_games_by_category(cat_id: str):
         if cat_id == "top" and data:
             print(f"Top Game #1: {data[0].get('name')}")
             data.sort(key=calculate_top_100, reverse=True)
-            return process_game_data(data[:100])
+            res = process_game_data(data[:100])
+            set_cached_data(cache_key, res)
+            return res
         
-
-        return process_game_data(data)
+        res = process_game_data(data)
+        set_cached_data(cache_key, res)
+        return res
     except Exception as e:
         print(f"Error fetching category {cat_id}: {e}")
         return []
@@ -553,9 +457,6 @@ def calculate_trending_games(game):
     popularity = game.get('popularity', 0)
     final_score = rating * math.log10(popularity + 1)
     return final_score
-
-# Global instance to ensure lru_cache persists across requests
-global_price_service = GamePriceService(CLIENT_ID, CLIENT_SECRET, ITAD_API_KEY)
 
 def get_genre_priority(g):
     name = g.get('name') if isinstance(g, dict) else ""
@@ -598,9 +499,5 @@ def process_game_data(data):
             game["release_date_formatted"] = dt_object.strftime("%B %d, %Y")
         else:
             game["release_date_formatted"] = "TBA"
-
-        # Set default price fields (to be filled by frontend)
-        game["price"] = "N/A"
-        game["all_prices"] = {"PC": "N/A", "PlayStation": "N/A", "Xbox": "N/A"}
 
     return data
