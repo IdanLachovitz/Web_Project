@@ -283,7 +283,11 @@ def login(request: AuthRequest):
     return {"access_token": user["id"], "token_type": "bearer", "username": user["username"]}
 
 @app.post("/library/add/{game_id}")
-def add_to_library(game_id: int, current_user_id: Optional[int] = Depends(get_current_user_id)):
+def add_to_library(
+    game_id: int, 
+    background_tasks: BackgroundTasks, 
+    current_user_id: Optional[int] = Depends(get_current_user_id)
+):
     if current_user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     
@@ -298,14 +302,23 @@ def add_to_library(game_id: int, current_user_id: Optional[int] = Depends(get_cu
     conn.commit()
     conn.close()
 
-    # Invalidate server-side caches for this user
+    # Clear memory cache to force a fresh pull from updated DB/Algorithm
     GLOBAL_DATA_CACHE.pop(f"lib_full_{current_user_id}", None)
     GLOBAL_DATA_CACHE.pop(f"recs_{current_user_id}", None)
+    
+    # Proactively warm up the full caches in the background
+    # This ensures the "Quick Render" works when the user clicks the section
+    background_tasks.add_task(get_user_library, current_user_id)
+    background_tasks.add_task(get_recommendations, current_user_id)
 
     return {"message": "Added to library"}
 
 @app.delete("/library/remove/{game_id}")
-def remove_from_library(game_id: int, current_user_id: Optional[int] = Depends(get_current_user_id)):
+def remove_from_library(
+    game_id: int, 
+    background_tasks: BackgroundTasks,
+    current_user_id: Optional[int] = Depends(get_current_user_id)
+):
     if current_user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     
@@ -315,11 +328,34 @@ def remove_from_library(game_id: int, current_user_id: Optional[int] = Depends(g
     conn.commit()
     conn.close()
 
-    # Invalidate server-side caches for this user
+    # Invalidate and warm up recommendations based on the new library state
     GLOBAL_DATA_CACHE.pop(f"lib_full_{current_user_id}", None)
     GLOBAL_DATA_CACHE.pop(f"recs_{current_user_id}", None)
+    background_tasks.add_task(get_user_library, current_user_id)
+    background_tasks.add_task(get_recommendations, current_user_id)
 
     return {"message": "Removed from library"}
+
+def fetch_and_cache_game_details(game_ids: List[int], category: str):
+    """Internal helper to ensure game metadata is saved in the DB for quick rendering."""
+    if not game_ids: return []
+    token = get_access_token()
+    if not token: return []
+    url = "https://api.igdb.com/v4/games"
+    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+    ids_str = ",".join(map(str, game_ids))
+    query = f"fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; where id = ({ids_str}); limit 100;"
+    try:
+        response = requests.post(url, headers=headers, data=query)
+        res = process_game_data(response.json())
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        for game in res:
+            cursor.execute("INSERT OR REPLACE INTO cached_games (game_id, category, game_json) VALUES (?, ?, ?)", (game["id"], category, json.dumps(game)))
+        conn.commit()
+        conn.close()
+        return res
+    except Exception: return []
 
 @app.get("/library/ids")
 def get_library_ids(current_user_id: Optional[int] = Depends(get_current_user_id)):
@@ -337,38 +373,49 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     if current_user_id is None:
         return []
     
+    # 1. Try memory cache (Instant)
+    cache_key = f"lib_full_{current_user_id}"
+    cached = get_cached_data(cache_key)
+    if cached: return cached
+
     conn = get_db_connection()
     cursor = conn.cursor()
+    # 2. Get User's Library IDs
     cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
-    items = cursor.fetchall()
-    conn.close()
-    
-    game_ids = [item["game_id"] for item in items]
-    
+    game_ids = [item["game_id"] for item in cursor.fetchall()]
+
     if not game_ids:
+        conn.close()
         return []
 
-    token = get_access_token()
-    if not token:
-        return []
+    # 3. Quick Render: Try fetching metadata from the DB cached_games table
+    placeholders = ",".join("?" for _ in game_ids)
+    cursor.execute(f"SELECT game_json FROM cached_games WHERE game_id IN ({placeholders}) GROUP BY game_id", game_ids)
+    db_rows = cursor.fetchall()
+    conn.close()
 
-    url = "https://api.igdb.com/v4/games"
-    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    # Added limit 100 to ensure all library items are returned (IGDB defaults to 10)
-    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; where id = ({",".join(map(str, game_ids))}); limit 100;'
+    res = [json.loads(row["game_json"]) for row in db_rows]
+    cached_ids = {g["id"] for g in res}
+    missing_ids = [gid for gid in game_ids if gid not in cached_ids]
+
+    # 4. Fallback: If metadata is missing for new items, fetch from IGDB
+    if missing_ids:
+        fetched_data = fetch_and_cache_game_details(missing_ids, 'library')
+        res.extend(fetched_data)
     
-    try:
-        response = requests.post(url, headers=headers, data=query)
-        response.raise_for_status()
-        data = response.json()
-        res = process_game_data(data) if isinstance(data, list) else []
-        return res
-    except Exception as e:
-        print(f"Library Fetch Error: {e}")
-        return []
+    set_cached_data(cache_key, res)
+    return res
 
 @app.get("/recommendations")
 def get_recommendations(current_user_id: Optional[int] = Depends(get_current_user_id)):
+    if current_user_id is None:
+        return []
+
+    # Try to get from server-side cache
+    cache_key = f"recs_{current_user_id}"
+    cached = get_cached_data(cache_key)
+    if cached: return cached
+
     token = get_access_token()
     if not token:
         raise HTTPException(status_code=500, detail="Authentication failed.")
@@ -385,10 +432,14 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
     try:
         url = "https://api.igdb.com/v4/games"
         headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-        ids_str = ",".join(map(str, user_library_ids))
         
-        lib_res = requests.post(url, headers=headers, data=f'fields genres.name; where id = ({ids_str});')
-        lib_data = lib_res.json()
+        # Use DB metadata to quickly identify genres for the recommendation logic
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        placeholders = ",".join("?" for _ in user_library_ids)
+        cursor.execute(f"SELECT game_json FROM cached_games WHERE game_id IN ({placeholders}) GROUP BY game_id", user_library_ids)
+        lib_data = [json.loads(row["game_json"]) for row in cursor.fetchall()]
+        conn.close()
         
         unique_main_genres = set()
         for game in lib_data:
@@ -412,6 +463,7 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
         if not unique_main_genres:
             return []
 
+        ids_str = ",".join(map(str, user_library_ids))
         genre_filter = ",".join(map(str, unique_main_genres))
         rec_query = (
             f"fields name, summary, total_rating, total_rating_count, first_release_date, "
@@ -449,6 +501,7 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
 
         filtered_games.sort(key=calculate_top_100, reverse=True)
         res = process_game_data(filtered_games[:100])
+        set_cached_data(cache_key, res)
         return res
 
     except Exception as e:

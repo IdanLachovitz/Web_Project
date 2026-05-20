@@ -254,6 +254,10 @@
             }
 
             try {
+                // Proactively warm up local client cache
+                prefetchCategory('library');
+                prefetchCategory('recommendations');
+
                 const response = await fetch('/recommendations', { headers });
                 const games = await response.json();
                 categoryDataCache['home'] = games;
@@ -828,6 +832,7 @@
                         await syncLibraryIds();
                         closeAuthModal();
                         showTempMessage(`Logged in successfully as ${data.username}`, 2000);
+                        // Immediate prefetch after login to have data ready
                         prefetchAllCategories();
                         loadHome();
                     } else {
@@ -888,12 +893,13 @@
             if (res.ok || res.status === 400) {
                 userLibraryIds.add(gameId);
                 updateLibraryButtons(gameId, true);
-                // Invalidate library and home cache as data has changed
-                // Removed: delete categoryDataCache['library'];
+                // Invalidate relevant caches as library state changed
+                delete categoryDataCache['library'];
                 delete categoryDataCache['home'];
                 delete categoryDataCache['recommendations'];
 
-                // Re-fetch recommendations in background
+                // Re-prefetch immediately so the UI is ready for the next click
+                prefetchCategory('library');
                 prefetchCategory('recommendations');
             } else if (res.status === 401) {
                 openAuthModal();
@@ -918,12 +924,13 @@
             if (res.ok) {
                 userLibraryIds.delete(gameId);
                 updateLibraryButtons(gameId, false);
-                // Invalidate library and home cache as data has changed
-                // Removed: delete categoryDataCache['library'];
+                // Invalidate relevant caches as library state changed
+                delete categoryDataCache['library'];
                 delete categoryDataCache['home'];
                 delete categoryDataCache['recommendations'];
 
-                // Re-fetch recommendations in background
+                // Re-prefetch immediately
+                prefetchCategory('library');
                 prefetchCategory('recommendations');
 
                 // Optimized: Update UI locally if we are currently looking at the library
