@@ -235,7 +235,6 @@ def start_scheduler():
     # Also trigger an initial refresh if DB is empty
     threading.Thread(target=refresh_all_games, daemon=True).start()
 
-
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     try:
