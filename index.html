@@ -65,6 +65,24 @@
             background: #9146ff;
         }
 
+        /* Enhanced Drag-to-scroll Smoothness */
+        #genreScrollContainer {
+            cursor: grab;
+            user-select: none;
+            -webkit-user-drag: none;
+            will-change: scroll-position;
+        }
+
+        #genreScrollContainer.active-scroll {
+            cursor: grabbing;
+            scroll-snap-type: none !important;
+            scroll-behavior: auto !important;
+        }
+
+        #genreScrollContainer img {
+            pointer-events: none;
+        }
+
         .nav-link-active {
             background-color: rgba(145, 70, 255, 0.1);
             color: #d5baff !important;
@@ -236,23 +254,16 @@
             const homeContent = document.getElementById('homeContent');
             if (homeContent) homeContent.classList.remove('hidden');
 
-            const token = localStorage.getItem('gs_user_id'); // Use user_id as token
+            const token = localStorage.getItem('gs_user_id');
             if (!token) return;
 
             const headers = { 'Authorization': `Bearer ${token}` };
-
-            const container = document.getElementById('homeNewReleases');
             const recsCache = categoryDataCache['recommendations'] || categoryDataCache['home'];
 
             if (recsCache) {
                 allCategoryGames = recsCache;
-                // Note: We no longer auto-populate the home grid with game cards 
-                // to preserve the new Genre Discovery layout.
-                // cachedGames = allCategoryGames.slice(0, 16);
-                // container.innerHTML = cachedGames.map(game => createGameCard(game)).join('');
                 return;
             }
-
             try {
                 // Proactively warm up local client cache
                 prefetchCategory('library');
@@ -446,7 +457,7 @@
             }
         }
 
-        async function loadCategory(id, title, subtitle, navId) {
+        async function loadCategory(id, title, navId) {
             if ((id === 'library' || id === 'recommendations') && !localStorage.getItem('gs_user_id')) {
                 openLoginRequiredModal();
                 loadHome();
@@ -503,7 +514,7 @@
             container.innerHTML = renderSkeletons();
 
             try {
-                const endpoint = id === 'library' ? '/library' : (id === 'recommendations' ? '/recommendations' : `/category/${id}`);
+                const endpoint = (id === 'library') ? '/library' : (id === 'recommendations' ? '/recommendations' : `/category/${id}`);
                 const response = await fetch(endpoint, { headers });
                 const games = await response.json();
                 categoryDataCache[id] = games;
@@ -1083,15 +1094,15 @@
             document.body.style.overflow = 'hidden';
         }
 
-        function loadLibrary() { loadCategory('library', 'YOUR LIBRARY', 'Manage your saved games and collections.', 'navLibrary'); }
-        function loadNewReleases() { loadCategory('new-releases', 'NEW RELEASES', 'The latest titles hitting the market right now.', 'navNewReleases'); }
-        function loadRecommendedAll() { loadCategory('recommendations', 'RECOMMENDED FOR YOU', 'Personalized suggestions based on your library.', 'navRecommended'); }
-        function loadTopRated() { loadCategory('top', 'TOP RATED', 'Highest rated.', 'navTopRated'); }
-        function loadTrends() { loadCategory('trends', 'TRENDING NOW', 'What the gaming community is buzzing about today.', 'navTrends'); }
-        function loadUpcoming() { loadCategory('upcoming', 'UPCOMING', 'Future hits to keep on your radar.', 'navUpcoming'); }
+        function loadLibrary() { loadCategory('library', 'YOUR LIBRARY', 'navLibrary'); }
+        function loadNewReleases() { loadCategory('new-releases', 'NEW RELEASES', 'navNewReleases'); }
+        function loadRecommendedAll() { loadCategory('recommendations', 'RECOMMENDED FOR YOU', 'navRecommended'); }
+        function loadTopRated() { loadCategory('top', 'TOP RATED', 'navTopRated'); }
+        function loadTrends() { loadCategory('trends', 'TRENDING NOW', 'navTrends'); }
+        function loadUpcoming() { loadCategory('upcoming', 'UPCOMING', 'navUpcoming'); }
 
         async function exploreGenre(genreValue, numericId) {
-            await loadCategory(numericId, genreValue.toUpperCase(), `Top ${genreValue} titles.`, 'navHome');
+            await loadCategory(numericId, genreValue.toUpperCase(), 'navHome');
         }
 
         function toggleSidebar(show) {
@@ -1194,6 +1205,74 @@
             updateUserDisplay(); // Set initial avatar state
             await syncLibraryIds();
             loadHome();
+
+            // Drag-to-scroll functionality for genre cards
+            const genreScrollContainer = document.getElementById('genreScrollContainer');
+            if (genreScrollContainer) {
+                let isDown = false, startX, scrollLeft, velocity = 0, lastX, animationId, hasDragged = false, startTime;
+
+                const startDragging = (e) => {
+                    isDown = true;
+                    velocity = 0;
+                    genreScrollContainer.classList.add('active-scroll');
+                    startX = e.pageX - genreScrollContainer.offsetLeft;
+                    scrollLeft = genreScrollContainer.scrollLeft;
+                    startTime = Date.now();
+                    hasDragged = false; // Reset drag state on mousedown
+                    lastX = e.pageX;
+                    cancelAnimationFrame(animationId);
+                };
+
+                const stopDragging = () => {
+                    if (!isDown) return;
+                    isDown = false;
+                    genreScrollContainer.classList.remove('active-scroll');
+
+                    // Apply momentum effect
+                    const applyMomentum = () => {
+                        if (Math.abs(velocity) > 0.2) {
+                            genreScrollContainer.scrollLeft -= velocity;
+                            velocity *= 0.95; // Smoothly decelerate
+                            animationId = requestAnimationFrame(applyMomentum);
+                        }
+                    };
+                    animationId = requestAnimationFrame(applyMomentum);
+                };
+
+                const moveDragging = (e) => {
+                    if (!isDown) return;
+                    e.preventDefault();
+
+                    // Threshold: if moved more than 5px or held for a while, consider it a drag
+                    if (Math.abs(e.pageX - startX) > 5 || (Date.now() - startTime > 150)) {
+                        hasDragged = true;
+                    }
+
+                    const x = e.pageX - genreScrollContainer.offsetLeft;
+                    const walk = (x - startX); // 1:1 tracking for natural feel
+                    genreScrollContainer.scrollLeft = scrollLeft - walk;
+
+                    // Track velocity with weighted smoothing to eliminate input jitter
+                    const instantVelocity = (e.pageX - lastX);
+                    velocity = (velocity * 0.2) + (instantVelocity * 0.8); // Smoothed velocity
+
+                    lastX = e.pageX;
+                };
+
+                genreScrollContainer.addEventListener('mousedown', startDragging);
+                // Use window for mouseup/mouseleave to ensure event fires even if mouse leaves container during drag
+                window.addEventListener('mouseup', stopDragging);
+                window.addEventListener('mouseleave', stopDragging);
+                genreScrollContainer.addEventListener('mousemove', moveDragging);
+
+                // INTERCEPT CLICKS: Use capture phase (true) to stop inline onclick if dragging
+                genreScrollContainer.addEventListener('click', (e) => {
+                    if (hasDragged) {
+                        e.stopImmediatePropagation();
+                        e.preventDefault();
+                    }
+                }, true);
+            }
             prefetchAllCategories();
             applyDisplaySettings();
         };
@@ -1322,13 +1401,8 @@
                                 <h2 class="text-2xl font-black text-white uppercase tracking-[0.2em] italic mb-2">
                                     Explore by Genre</h2>
                             </div>
-                            <button onclick="loadRecommendedAll()"
-                                class="text-purple-400 hover:text-purple-300 text-xs font-black uppercase tracking-widest flex items-center gap-2 group transition-all shrink-0">
-                                Personalized Feed <span
-                                    class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                            </button>
                         </div>
-                        <div
+                        <div id="genreScrollContainer"
                             class="flex overflow-x-auto gap-6 pb-8 pt-10 -mt-16 -mb-12 pl-12 pr-10 -ml-12 -mr-12 snap-x snap-mandatory custom-scrollbar scroll-pl-14">
                             <!-- RPG Card -->
                             <div onclick="exploreGenre('Role-playing (RPG)', '12')"
@@ -1352,7 +1426,7 @@
                             </div>
 
                             <!-- Shooter Card -->
-                            <div onclick="exploreGenre('Shooter', '5')"
+                            <div data-genre-value="Shooter" data-numeric-id="5" onclick="exploreGenre('Shooter', '5')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://w0.peakpx.com/wallpaper/954/59/HD-wallpaper-battlefield-battlefield-3.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1373,7 +1447,7 @@
                             </div>
 
                             <!-- Racing Card -->
-                            <div onclick="exploreGenre('Racing', '10')"
+                            <div data-genre-value="Racing" data-numeric-id="10" onclick="exploreGenre('Racing', '10')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://wallpapercat.com/w/full/d/4/3/1506648-1080x1920-samsung-full-hd-racing-game-wallpaper.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1394,7 +1468,7 @@
                             </div>
 
                             <!-- Sport Card -->
-                            <div onclick="exploreGenre('Sport', '14')"
+                            <div data-genre-value="Sport" data-numeric-id="14" onclick="exploreGenre('Sport', '14')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://img.magnific.com/free-photo/soccer-sport-environment-filed_23-2151891691.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1415,7 +1489,8 @@
                             </div>
 
                             <!-- Strategy Card -->
-                            <div onclick="exploreGenre('Strategy', '15')"
+                            <div data-genre-value="Strategy" data-numeric-id="15"
+                                onclick="exploreGenre('Strategy', '15')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://wallpapercave.com/wp/wp7570046.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1436,7 +1511,7 @@
                             </div>
 
                             <!-- Fighting Card -->
-                            <div onclick="exploreGenre('Fighting', '4')"
+                            <div data-genre-value="Fighting" data-numeric-id="4" onclick="exploreGenre('Fighting', '4')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://i.pinimg.com/474x/f8/6c/51/f86c51a9f0b99dd67678c25dfa2cdafa.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1457,7 +1532,8 @@
                             </div>
 
                             <!-- Adventure Card -->
-                            <div onclick="exploreGenre('Adventure', '31')"
+                            <div data-genre-value="Adventure" data-numeric-id="31"
+                                onclick="exploreGenre('Adventure', '31')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://i.pinimg.com/736x/c7/2a/e1/c72ae1449b7718cc2c5fd6203e2bc493.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1478,7 +1554,7 @@
                             </div>
 
                             <!-- Arcade Card -->
-                            <div onclick="exploreGenre('Arcade', '33')"
+                            <div data-genre-value="Arcade" data-numeric-id="33" onclick="exploreGenre('Arcade', '33')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://w0.peakpx.com/wallpaper/141/581/HD-wallpaper-arcade-arcade-cabinet-video-games-indoors-capcom-japan.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
@@ -1499,7 +1575,8 @@
                             </div>
 
                             <!-- Simulator Card -->
-                            <div onclick="exploreGenre('Simulator', '13')"
+                            <div data-genre-value="Simulator" data-numeric-id="13"
+                                onclick="exploreGenre('Simulator', '13')"
                                 class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://w0.peakpx.com/wallpaper/387/137/HD-wallpaper-iracing-indy-car-games-pc-race-car-racing-sim-simulation.jpg"
                                     class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"

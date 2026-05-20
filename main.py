@@ -1,13 +1,10 @@
 import requests
 import os
-import re
-import functools
 import sqlite3
 import hashlib
 import time
 import threading
 from fastapi import FastAPI, HTTPException, Depends, status, Header, BackgroundTasks
-from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from fastapi.responses import HTMLResponse
 from datetime import datetime, timedelta
@@ -283,7 +280,7 @@ def login(request: AuthRequest):
     return {"access_token": user["id"], "token_type": "bearer", "username": user["username"]}
 
 @app.post("/library/add/{game_id}")
-def add_to_library(
+async def add_to_library(
     game_id: int, 
     background_tasks: BackgroundTasks, 
     current_user_id: Optional[int] = Depends(get_current_user_id)
@@ -314,7 +311,7 @@ def add_to_library(
     return {"message": "Added to library"}
 
 @app.delete("/library/remove/{game_id}")
-def remove_from_library(
+async def remove_from_library(
     game_id: int, 
     background_tasks: BackgroundTasks,
     current_user_id: Optional[int] = Depends(get_current_user_id)
@@ -469,8 +466,8 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
             f"fields name, summary, total_rating, total_rating_count, first_release_date, "
             f"cover.url, platforms.name, platforms.abbreviation, genres.name, "
             f"screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; "
-            f"where genres = ({genre_filter}) & id != ({ids_str}) & "
-            f"total_rating != 70 & total_rating_count > 200 & cover != null; "
+            f"where genres = ({genre_filter}) & id != ({ids_str}) & cover != null & "
+            f"total_rating_count > 200; "
             f"limit 500;"
         )
         
@@ -566,15 +563,6 @@ def calculate_top_100(game):
         return 0
 
     return rating * (math.log(count) ** 0.4)
-
-def calculate_trending_games(game):
-    rating = game.get('total_rating')
-    if rating is None:
-        rating = 75
-        
-    popularity = game.get('popularity', 0)
-    final_score = rating * math.log10(popularity + 1)
-    return final_score
 
 def get_genre_priority(g):
     name = g.get('name') if isinstance(g, dict) else ""
