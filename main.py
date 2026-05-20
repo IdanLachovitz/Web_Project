@@ -5,11 +5,12 @@ import functools
 import sqlite3
 import hashlib
 import time
-from fastapi import FastAPI, HTTPException, Depends, status, Header
+import threading
+from fastapi import FastAPI, HTTPException, Depends, status, Header, BackgroundTasks
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from fastapi.responses import HTMLResponse
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +21,7 @@ import math
 load_dotenv()
 
 # Global Priority for choosing the "Main" genre across the site
-GENRE_PRIORITY = ["Shooter", "Racing", "Role-playing (RPG)", "Fighting", "Sport", "Arcade", "Simulator", "Adventure", "Action"]
+GENRE_PRIORITY = ["Shooter", "Racing", "Strategy", "Role-playing (RPG)", "Fighting", "Sport", "Arcade", "Simulator", "Adventure"]
 
 # --- Database Setup (SQLite) ---
 DATABASE_FILE = "gamesense.db"
@@ -61,6 +62,14 @@ def init_db():
             game_id INTEGER NOT NULL,
             UNIQUE(user_id, game_id),
             FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cached_games (
+            game_id INTEGER,
+            category TEXT,
+            game_json TEXT,
+            PRIMARY KEY (game_id, category)
         );
     """)
     conn.commit()
@@ -127,6 +136,104 @@ def get_access_token():
         return _token_cache["token"]
     except Exception as e:
         return None
+
+def store_games_in_db(games, category):
+    """Saves processed game objects into the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Clear existing cache for this category to keep it fresh
+    cursor.execute("DELETE FROM cached_games WHERE category = ?", (category,))
+    
+    for game in games:
+        cursor.execute(
+            "INSERT OR REPLACE INTO cached_games (game_id, category, game_json) VALUES (?, ?, ?)",
+            (game["id"], category, json.dumps(game))
+        )
+    conn.commit()
+    conn.close()
+
+def fetch_and_store_category(cat_id: str):
+    """Internal helper to fetch data from IGDB and update local DB."""
+    token = get_access_token()
+    if not token:
+        return
+
+    url = "https://api.igdb.com/v4/games"
+    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+    current_time = int(time.time())
+
+    base_fields = (
+        "fields name, summary, total_rating, total_rating_count, first_release_date, "
+        "cover.url, platforms.name, platforms.abbreviation, genres.name, "
+        "screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name;"
+    )
+
+    if cat_id == "new-releases":
+        filters = f"where first_release_date <= {current_time} & first_release_date > 0 & cover != null;"
+        sorting = "sort first_release_date desc;"
+    elif cat_id == "top":
+        filters = f"where version_parent = null & total_rating_count > 200 & total_rating > 80 & cover != null;"
+        sorting = "sort total_rating desc;"
+    elif cat_id == "trends":
+        filters = f"where version_parent = null & hypes > 10 & first_release_date > {int(time.time()) - (180 * 24 * 60 * 60)} & cover != null;"
+        sorting = "sort hypes desc;"
+    elif cat_id == "upcoming":
+        filters = f"where first_release_date > {current_time} & version_parent = null & cover != null;"
+        sorting = "sort first_release_date asc;"
+    else:
+        return
+
+    query = f"{base_fields} {filters} {sorting} limit 250;" # Increased limit for local storage
+
+    try:
+        response = requests.post(url, headers=headers, data=query)
+        response.raise_for_status()
+        raw_data = response.json()
+        processed_data = process_game_data(raw_data)
+        
+        if cat_id == "top":
+            processed_data.sort(key=calculate_top_100, reverse=True)
+
+        store_games_in_db(processed_data, cat_id)
+        print(f"Successfully refreshed {cat_id} in database.")
+    except Exception as e:
+        print(f"Error refreshing {cat_id}: {e}")
+
+def refresh_all_games():
+    """Runs the refresh for all categories."""
+    print("Starting daily database refresh...")
+    categories = ["top", "trends", "upcoming", "new-releases"]
+    for cat in categories:
+        fetch_and_store_category(cat)
+    print("Daily refresh complete.")
+
+def scheduler_loop():
+    """Background loop that waits until 8:00 AM every day."""
+    while True:
+        now = datetime.now()
+        # Target is 8:00 AM today
+        target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        
+        # If 8 AM has already passed today, target 8 AM tomorrow
+        if now >= target:
+            target += timedelta(days=1)
+        
+        sleep_seconds = (target - now).total_seconds()
+        print(f"Next database refresh scheduled for {target} (in {round(sleep_seconds/3600, 2)} hours)")
+        
+        # Sleep until 8 AM (check every hour to be safe, or just sleep the whole duration)
+        time.sleep(sleep_seconds)
+        refresh_all_games()
+        # Sleep for a minute to ensure we don't trigger twice in the same minute
+        time.sleep(61)
+
+# Start the scheduler in a separate daemon thread so it doesn't block the web server
+@app.on_event("startup")
+def start_scheduler():
+    thread = threading.Thread(target=scheduler_loop, daemon=True)
+    thread.start()
+    # Also trigger an initial refresh if DB is empty
+    threading.Thread(target=refresh_all_games, daemon=True).start()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -231,11 +338,6 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     if current_user_id is None:
         return []
     
-    # Try to get from personal cache
-    cache_key = f"lib_full_{current_user_id}"
-    cached = get_cached_data(cache_key, ttl=300) # 5 min TTL for library
-    if cached: return cached
-
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
@@ -248,28 +350,26 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
         return []
 
     token = get_access_token()
+    if not token:
+        return []
+
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; where id = ({",".join(map(str, game_ids))});'
+    # Added limit 100 to ensure all library items are returned (IGDB defaults to 10)
+    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; where id = ({",".join(map(str, game_ids))}); limit 100;'
     
     try:
         response = requests.post(url, headers=headers, data=query)
-        res = process_game_data(response.json())
-        set_cached_data(cache_key, res)
+        response.raise_for_status()
+        data = response.json()
+        res = process_game_data(data) if isinstance(data, list) else []
         return res
-    except Exception:
+    except Exception as e:
+        print(f"Library Fetch Error: {e}")
         return []
 
 @app.get("/recommendations")
 def get_recommendations(current_user_id: Optional[int] = Depends(get_current_user_id)):
-    if current_user_id is None:
-        return []
-
-    # Personal Recommendation Cache
-    cache_key = f"recs_{current_user_id}"
-    cached = get_cached_data(cache_key, ttl=600) # 10 min TTL
-    if cached: return cached
-
     token = get_access_token()
     if not token:
         raise HTTPException(status_code=500, detail="Authentication failed.")
@@ -350,7 +450,6 @@ def get_recommendations(current_user_id: Optional[int] = Depends(get_current_use
 
         filtered_games.sort(key=calculate_top_100, reverse=True)
         res = process_game_data(filtered_games[:100])
-        set_cached_data(cache_key, res)
         return res
 
     except Exception as e:
@@ -378,67 +477,34 @@ def search_game(game_name: str):
 
 @app.get("/category/{cat_id}")
 def get_games_by_category(cat_id: str):
-    token = get_access_token()
-
-    cache_key = f"cat_{cat_id}"
-    cached = get_cached_data(cache_key)
-    if cached: return cached
-
-    if not token:
-        raise HTTPException(status_code=500, detail="Authentication failed.")
-
-    url = "https://api.igdb.com/v4/games"
-    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    current_time = int(time.time())
-
-    base_fields = (
-        "fields name, summary, total_rating, total_rating_count, first_release_date, "
-        "cover.url, platforms.name, platforms.abbreviation, genres.name, "
-        "screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name;"
-    )
-
-    if cat_id == "new-releases":
-        filters = f"where first_release_date <= {current_time} & first_release_date > 0 & cover != null;"
-        sorting = "sort first_release_date desc;"
-
-    elif cat_id == "top":
-        filters = f"where version_parent = null & total_rating_count > 200 & total_rating > 80 & cover != null;"
-        sorting = "sort total_rating desc;"
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    elif cat_id == "trends":
-        filters = f"where version_parent = null & hypes > 10 & first_release_date > {int(time.time()) - (180 * 24 * 60 * 60)} & cover != null;"
-        sorting = "sort hypes desc;"
-    
-    elif cat_id == "upcoming":
-        filters = f"where first_release_date > {current_time} & version_parent = null & cover != null;"
-        sorting = "sort first_release_date asc;"
-    
-    else:
-        raise HTTPException(status_code=404, detail="Category not found")
-
-
-    query = f"{base_fields} {filters} {sorting} limit 100;"
-
     try:
-        response = requests.post(url, headers=headers, data=query)
-        response.raise_for_status()
-        data = response.json()
-        with open("debug_data.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        cursor.execute("SELECT game_json FROM cached_games WHERE category = ?", (cat_id,))
+        rows = cursor.fetchall()
         
-        if cat_id == "top" and data:
-            print(f"Top Game #1: {data[0].get('name')}")
-            data.sort(key=calculate_top_100, reverse=True)
-            res = process_game_data(data[:100])
-            set_cached_data(cache_key, res)
-            return res
+        if not rows:
+            # If DB is empty for this category, try to fetch it once immediately
+            conn.close()
+            fetch_and_store_category(cat_id)
+            # Re-open connection to get newly fetched data
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT game_json FROM cached_games WHERE category = ?", (cat_id,))
+            rows = cursor.fetchall()
+
+        games = [json.loads(row["game_json"]) for row in rows]
         
-        res = process_game_data(data)
-        set_cached_data(cache_key, res)
-        return res
-    except Exception as e:
-        print(f"Error fetching category {cat_id}: {e}")
-        return []
+        # Sort logic for specific categories
+        if cat_id == "top":
+            games.sort(key=calculate_top_100, reverse=True)
+        elif cat_id == "new-releases":
+            games.sort(key=lambda x: x.get('first_release_date', 0), reverse=True)
+            
+        return games[:100] # Return the requested amount to the frontend
+    finally:
+        conn.close()
 
 def calculate_top_100(game):
     rating = game.get('total_rating', 0)

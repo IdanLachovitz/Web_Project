@@ -381,8 +381,8 @@
             }
         ],
         "summary": "Resident Evil Requiem is the ninth entry in the Resident Evil series. Experience terrifying survival horror with FBI analyst Grace Ashcroft, and dive into pulse-pounding action with legendary agent Leon S. Kennedy. Both of their journeys and unique gameplay styles intertwine into a heart-stopping, emotional experience that will chill you to your core.",
-        "total_rating": 89.93879826456481,
-        "total_rating_count": 242,
+        "total_rating": 90.00965952093516,
+        "total_rating_count": 243,
         "videos": [
             {
                 "id": 152780,
@@ -527,8 +527,8 @@
             }
         ],
         "summary": "Crimson Desert is an open-world action-adventure game set in the beautiful yet brutal continent of Pywel. Embark on a journey as the Greymane Kliff and restore what has been lost. Explore uncharted lands, fight against threats that stand in your way, and discover the wonders the world has in store.",
-        "total_rating": 87.05120435572397,
-        "total_rating_count": 84,
+        "total_rating": 87.01689534109309,
+        "total_rating_count": 85,
         "videos": [
             {
                 "id": 41332,
@@ -821,8 +821,8 @@
             }
         ],
         "summary": "Pragmata is a science fiction action-adventure game set in a near-future environment. The story follows Hugh and his android companion Diana as they navigate a lunar research station. Gameplay incorporates action elements alongside mechanics involving interaction with systems within the environment.",
-        "total_rating": 87.34843604708898,
-        "total_rating_count": 66,
+        "total_rating": 87.35156880135386,
+        "total_rating_count": 68,
         "videos": [
             {
                 "id": 59914,
@@ -1304,8 +1304,8 @@
             }
         ],
         "summary": "NTE: Neverness to Everness is a supernatural open-world RPG developed by Hotta Studio. The story begins in the city of Hethereau, where you play as its first \"unlicensed\" Anomaly Hunter. You'll join the crew at Eibon, a rundown antique shop that keeps the lights on by taking Anomaly commissions from anyone willing to pay. Alongside a diverse cast of extraordinary companions, you'll unravel urban mysteries, ride out adventures full of laughs and heartbreak, and write your own stories in the neon-lit streets.",
-        "total_rating": 75.41773832527282,
-        "total_rating_count": 26,
+        "total_rating": 75.29432769041955,
+        "total_rating_count": 27,
         "videos": [
             {
                 "id": 119656,
@@ -1507,8 +1507,8 @@
             }
         ],
         "summary": "Replaced is a 2.5D sci-fi retro-futuristic action platformer where you play as R.E.A.C.H. - an artificial intelligence trapped in a human body against its own will. Replaced combines cinematic platforming, pixel art and free-flow action combat set in an alternative 1980's.",
-        "total_rating": 74.65963413122546,
-        "total_rating_count": 19,
+        "total_rating": 74.66087216849608,
+        "total_rating_count": 20,
         "videos": [
             {
                 "id": 50908,
@@ -2039,8 +2039,8 @@
             }
         ],
         "summary": "Earth is dying and humanity is running out of time. 12 light years from home, Tau Ceti f offers a small sliver of hope. When the colony ship Cassiopeia crash lands on the planet, its crew soon realize they are far from being alone. In space, death takes many forms.",
-        "total_rating": 81.66666666666667,
-        "total_rating_count": 3,
+        "total_rating": 77.2401404286355,
+        "total_rating_count": 10,
         "videos": [
             {
                 "id": 123446,
@@ -2468,8 +2468,8 @@
             }
         ],
         "summary": "Discover the breathtaking landscapes of Japan in over 550 real-world cars and become a racing Legend at the Horizon Festival. Start your journey as a tourist and explore a world full of hit music and Japanese culture. Build a Valley Estate, acquire awe-inspiring homes, and display your prized car collection in fully Customizable Garages. Cruise the roads with your friends and join Car Meets around Japan, unleash your imagination with EventLab and build together in Horizon CoLab.",
-        "total_rating": 84.5,
-        "total_rating_count": 2,
+        "total_rating": 86.33333333333333,
+        "total_rating_count": 3,
         "videos": [
             {
                 "id": 163265,
@@ -3268,8 +3268,8 @@
             }
         ],
         "summary": "Subnautica 2 is an underwater survival adventure set on an all-new alien world, developed by Unknown Worlds. Play alone or with friends in 4-player co-op. Adapt to survive by building custom bases and crafting tools. Explore the unknown to uncover the mysteries hidden within the depths.",
-        "total_rating": 95.32034216419794,
-        "total_rating_count": 9,
+        "total_rating": 90.166816718728,
+        "total_rating_count": 14,
         "videos": [
             {
                 "id": 130115,
@@ -3659,6 +3659,120 @@
         ]
     },
     {
+        "id": 361855,
+        "cover": {
+            "id": 480825,
+            "url": "//images.igdb.com/igdb/image/upload/t_thumb/coab09.jpg"
+        },
+        "first_release_date": 1779408000,
+        "genres": [
+            {
+                "id": 9,
+                "name": "Puzzle"
+            },
+            {
+                "id": 31,
+                "name": "Adventure"
+            }
+        ],
+        "involved_companies": [
+            {
+                "id": 337850,
+                "company": {
+                    "id": 292,
+                    "name": "Traveller's Tales"
+                },
+                "developer": true
+            },
+            {
+                "id": 337851,
+                "company": {
+                    "id": 50,
+                    "name": "WB Games"
+                },
+                "developer": false
+            }
+        ],
+        "name": "LEGO Batman: Legacy of the Dark Knight",
+        "platforms": [
+            {
+                "id": 169,
+                "abbreviation": "Series X|S",
+                "name": "Xbox Series X|S"
+            },
+            {
+                "id": 508,
+                "abbreviation": "Switch 2",
+                "name": "Nintendo Switch 2"
+            },
+            {
+                "id": 6,
+                "abbreviation": "PC",
+                "name": "PC (Microsoft Windows)"
+            },
+            {
+                "id": 167,
+                "abbreviation": "PS5",
+                "name": "PlayStation 5"
+            }
+        ],
+        "screenshots": [
+            {
+                "id": 1615314,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdu.jpg"
+            },
+            {
+                "id": 1615315,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdv.jpg"
+            },
+            {
+                "id": 1615316,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdw.jpg"
+            },
+            {
+                "id": 1615317,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdx.jpg"
+            },
+            {
+                "id": 1615318,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdy.jpg"
+            },
+            {
+                "id": 1615319,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdz.jpg"
+            }
+        ],
+        "summary": "Rise as the Dark Knight and experience the essential Batman story in a bold, action-packed adventure with hard-hitting combat, an open-world Gotham City, and the signature LEGO charm that fans know and love.",
+        "total_rating": 91.5,
+        "total_rating_count": 2,
+        "videos": [
+            {
+                "id": 159571,
+                "video_id": "1hQAoGj01Rc"
+            },
+            {
+                "id": 170964,
+                "video_id": "G4iE5A3R_rM"
+            },
+            {
+                "id": 177211,
+                "video_id": "n4LYtP_TPJg"
+            },
+            {
+                "id": 178599,
+                "video_id": "7o_5mtrXyQ8"
+            },
+            {
+                "id": 178909,
+                "video_id": "wCGdYd_Uj44"
+            },
+            {
+                "id": 183081,
+                "video_id": "DfJaUpW_P00"
+            }
+        ]
+    },
+    {
         "id": 381235,
         "cover": {
             "id": 515248,
@@ -3750,118 +3864,6 @@
             {
                 "id": 170965,
                 "video_id": "KKykeE6BOYc"
-            }
-        ]
-    },
-    {
-        "id": 361855,
-        "cover": {
-            "id": 480825,
-            "url": "//images.igdb.com/igdb/image/upload/t_thumb/coab09.jpg"
-        },
-        "first_release_date": 1779408000,
-        "genres": [
-            {
-                "id": 9,
-                "name": "Puzzle"
-            },
-            {
-                "id": 31,
-                "name": "Adventure"
-            }
-        ],
-        "involved_companies": [
-            {
-                "id": 337850,
-                "company": {
-                    "id": 292,
-                    "name": "Traveller's Tales"
-                },
-                "developer": true
-            },
-            {
-                "id": 337851,
-                "company": {
-                    "id": 50,
-                    "name": "WB Games"
-                },
-                "developer": false
-            }
-        ],
-        "name": "LEGO Batman: Legacy of the Dark Knight",
-        "platforms": [
-            {
-                "id": 169,
-                "abbreviation": "Series X|S",
-                "name": "Xbox Series X|S"
-            },
-            {
-                "id": 508,
-                "abbreviation": "Switch 2",
-                "name": "Nintendo Switch 2"
-            },
-            {
-                "id": 6,
-                "abbreviation": "PC",
-                "name": "PC (Microsoft Windows)"
-            },
-            {
-                "id": 167,
-                "abbreviation": "PS5",
-                "name": "PlayStation 5"
-            }
-        ],
-        "screenshots": [
-            {
-                "id": 1615314,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdu.jpg"
-            },
-            {
-                "id": 1615315,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdv.jpg"
-            },
-            {
-                "id": 1615316,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdw.jpg"
-            },
-            {
-                "id": 1615317,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdx.jpg"
-            },
-            {
-                "id": 1615318,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdy.jpg"
-            },
-            {
-                "id": 1615319,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scymdz.jpg"
-            }
-        ],
-        "summary": "Rise as the Dark Knight and experience the essential Batman story in a bold, action-packed adventure with hard-hitting combat, an open-world Gotham City, and the signature LEGO charm that fans know and love.",
-        "videos": [
-            {
-                "id": 159571,
-                "video_id": "1hQAoGj01Rc"
-            },
-            {
-                "id": 170964,
-                "video_id": "G4iE5A3R_rM"
-            },
-            {
-                "id": 177211,
-                "video_id": "n4LYtP_TPJg"
-            },
-            {
-                "id": 178599,
-                "video_id": "7o_5mtrXyQ8"
-            },
-            {
-                "id": 178909,
-                "video_id": "wCGdYd_Uj44"
-            },
-            {
-                "id": 183081,
-                "video_id": "DfJaUpW_P00"
             }
         ]
     },
@@ -4089,8 +4091,8 @@
             }
         ],
         "summary": "The iconic roguelike deckbuilder returns!\n\nCraft a unique deck, encounter bizarre creatures, and discover relics of immense power in Slay the Spire 2 - featuring new characters, cards, events, alternate acts, and more!",
-        "total_rating": 85.3522846778926,
-        "total_rating_count": 24,
+        "total_rating": 85.37617650424812,
+        "total_rating_count": 25,
         "videos": [
             {
                 "id": 111117,
@@ -4588,8 +4590,8 @@
             }
         ],
         "summary": "On their last night of high school, three friends embark on one more adventure together. Play through a mixtape of memories, set to the soundtrack of a generation.",
-        "total_rating": 73.02368421460824,
-        "total_rating_count": 22,
+        "total_rating": 73.01974254235847,
+        "total_rating_count": 24,
         "videos": [
             {
                 "id": 115727,
@@ -7555,6 +7557,8 @@
             }
         ],
         "summary": "From ZA/UM comes ZERO PARADES: For Dead Spies – a story-rich espionage RPG. You're a brilliant but tormented operant on a desperate assignment. Pick up the pieces of your broken network, untangle a bloody web of intrigue at the End of History, and prove yourself on the big stage or blow it all up – again.",
+        "total_rating": 66.0,
+        "total_rating_count": 1,
         "videos": [
             {
                 "id": 159536,
@@ -7579,6 +7583,105 @@
             {
                 "id": 183136,
                 "video_id": "6QCWM7WnovE"
+            },
+            {
+                "id": 184131,
+                "video_id": "cMrfwqMlSpQ"
+            }
+        ]
+    },
+    {
+        "id": 398225,
+        "cover": {
+            "id": 556875,
+            "url": "//images.igdb.com/igdb/image/upload/t_thumb/cobxor.jpg"
+        },
+        "first_release_date": 1798675200,
+        "genres": [
+            {
+                "id": 5,
+                "name": "Shooter"
+            },
+            {
+                "id": 31,
+                "name": "Adventure"
+            }
+        ],
+        "involved_companies": [
+            {
+                "id": 381639,
+                "company": {
+                    "id": 314,
+                    "name": "4A Games"
+                },
+                "developer": true
+            },
+            {
+                "id": 381640,
+                "company": {
+                    "id": 423,
+                    "name": "Deep Silver"
+                },
+                "developer": false
+            }
+        ],
+        "name": "Metro 2039",
+        "platforms": [
+            {
+                "id": 169,
+                "abbreviation": "Series X|S",
+                "name": "Xbox Series X|S"
+            },
+            {
+                "id": 6,
+                "abbreviation": "PC",
+                "name": "PC (Microsoft Windows)"
+            },
+            {
+                "id": 167,
+                "abbreviation": "PS5",
+                "name": "PlayStation 5"
+            }
+        ],
+        "screenshots": [
+            {
+                "id": 1818066,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytu.jpg"
+            },
+            {
+                "id": 1818067,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytv.jpg"
+            },
+            {
+                "id": 1818068,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytw.jpg"
+            },
+            {
+                "id": 1818069,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytx.jpg"
+            },
+            {
+                "id": 1818070,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12yty.jpg"
+            },
+            {
+                "id": 1818071,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytz.jpg"
+            }
+        ],
+        "summary": "METRO 2039 is the next landmark FPS from acclaimed storytellers, 4A Games. Journey into the dark heart of post-apocalyptic Moscow in a harrowing conflict for the very soul of the Metro.\n\nThe year is 2039. For a quarter century, the last survivors of nuclear war have been locked in bitter conflict deep in the Metro tunnels beneath the poisoned city of Moscow.\n\nNow, finally, they have been united by a single leader, a fanatical Spartan known as Hunter. But this is no peace: Hunter’s Novoreich regime rules through propaganda and fear, subjugating the population in the name of a new war for the surface against a dark and terrifying enemy.\n\nIn the wilderness beyond the city, the reclusive Stranger is haunted by violent waking nightmares. When the ghosts of his past force him out of exile, he must undertake a harrowing journey into the shattered ruins of Moscow, to the one place he swore he’d never go. The Metro.\n\nExperience the most shocking METRO adventure yet in a powerful single-player story that weaves exploration, survival, combat and stealth across a hauntingly beautiful but deadly world with unparalleled immersion.\n\nInspired by the worldwide best-selling METRO book trilogy by Dmitry Glukhovsky.",
+        "videos": [
+            {
+                "id": 180994,
+                "video_id": "4VBIDuqjQic"
+            },
+            {
+                "id": 181337,
+                "video_id": "MSdghdelbAw"
+            },
+            {
+                "id": 181338,
+                "video_id": "doZYgUUIRY4"
             }
         ]
     },
@@ -7702,101 +7805,6 @@
             {
                 "id": 176155,
                 "video_id": "K2uVoWOFBR8"
-            }
-        ]
-    },
-    {
-        "id": 398225,
-        "cover": {
-            "id": 556875,
-            "url": "//images.igdb.com/igdb/image/upload/t_thumb/cobxor.jpg"
-        },
-        "first_release_date": 1798675200,
-        "genres": [
-            {
-                "id": 5,
-                "name": "Shooter"
-            },
-            {
-                "id": 31,
-                "name": "Adventure"
-            }
-        ],
-        "involved_companies": [
-            {
-                "id": 381639,
-                "company": {
-                    "id": 314,
-                    "name": "4A Games"
-                },
-                "developer": true
-            },
-            {
-                "id": 381640,
-                "company": {
-                    "id": 423,
-                    "name": "Deep Silver"
-                },
-                "developer": false
-            }
-        ],
-        "name": "Metro 2039",
-        "platforms": [
-            {
-                "id": 169,
-                "abbreviation": "Series X|S",
-                "name": "Xbox Series X|S"
-            },
-            {
-                "id": 6,
-                "abbreviation": "PC",
-                "name": "PC (Microsoft Windows)"
-            },
-            {
-                "id": 167,
-                "abbreviation": "PS5",
-                "name": "PlayStation 5"
-            }
-        ],
-        "screenshots": [
-            {
-                "id": 1818066,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytu.jpg"
-            },
-            {
-                "id": 1818067,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytv.jpg"
-            },
-            {
-                "id": 1818068,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytw.jpg"
-            },
-            {
-                "id": 1818069,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytx.jpg"
-            },
-            {
-                "id": 1818070,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12yty.jpg"
-            },
-            {
-                "id": 1818071,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/sc12ytz.jpg"
-            }
-        ],
-        "summary": "METRO 2039 is the next landmark FPS from acclaimed storytellers, 4A Games. Journey into the dark heart of post-apocalyptic Moscow in a harrowing conflict for the very soul of the Metro.\n\nThe year is 2039. For a quarter century, the last survivors of nuclear war have been locked in bitter conflict deep in the Metro tunnels beneath the poisoned city of Moscow.\n\nNow, finally, they have been united by a single leader, a fanatical Spartan known as Hunter. But this is no peace: Hunter’s Novoreich regime rules through propaganda and fear, subjugating the population in the name of a new war for the surface against a dark and terrifying enemy.\n\nIn the wilderness beyond the city, the reclusive Stranger is haunted by violent waking nightmares. When the ghosts of his past force him out of exile, he must undertake a harrowing journey into the shattered ruins of Moscow, to the one place he swore he’d never go. The Metro.\n\nExperience the most shocking METRO adventure yet in a powerful single-player story that weaves exploration, survival, combat and stealth across a hauntingly beautiful but deadly world with unparalleled immersion.\n\nInspired by the worldwide best-selling METRO book trilogy by Dmitry Glukhovsky.",
-        "videos": [
-            {
-                "id": 180994,
-                "video_id": "4VBIDuqjQic"
-            },
-            {
-                "id": 181337,
-                "video_id": "MSdghdelbAw"
-            },
-            {
-                "id": 181338,
-                "video_id": "doZYgUUIRY4"
             }
         ]
     },
@@ -9490,6 +9498,117 @@
         ]
     },
     {
+        "id": 356552,
+        "cover": {
+            "id": 473913,
+            "url": "//images.igdb.com/igdb/image/upload/t_thumb/coa5o9.jpg"
+        },
+        "first_release_date": 1798675200,
+        "genres": [
+            {
+                "id": 31,
+                "name": "Adventure"
+            }
+        ],
+        "involved_companies": [
+            {
+                "id": 331755,
+                "company": {
+                    "id": 946,
+                    "name": "Saber Interactive"
+                },
+                "developer": false
+            },
+            {
+                "id": 331756,
+                "company": {
+                    "id": 19126,
+                    "name": "Mad Head Games"
+                },
+                "developer": true
+            },
+            {
+                "id": 339716,
+                "company": {
+                    "id": 31014,
+                    "name": "Boss Team Games"
+                },
+                "developer": false
+            }
+        ],
+        "name": "Clive Barker's Hellraiser: Revival",
+        "platforms": [
+            {
+                "id": 169,
+                "abbreviation": "Series X|S",
+                "name": "Xbox Series X|S"
+            },
+            {
+                "id": 6,
+                "abbreviation": "PC",
+                "name": "PC (Microsoft Windows)"
+            },
+            {
+                "id": 167,
+                "abbreviation": "PS5",
+                "name": "PlayStation 5"
+            }
+        ],
+        "screenshots": [
+            {
+                "id": 1590092,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2x8.jpg"
+            },
+            {
+                "id": 1590093,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2x9.jpg"
+            },
+            {
+                "id": 1590094,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xa.jpg"
+            },
+            {
+                "id": 1590095,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xb.jpg"
+            },
+            {
+                "id": 1590096,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xc.jpg"
+            },
+            {
+                "id": 1590097,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xd.jpg"
+            },
+            {
+                "id": 1590098,
+                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xe.jpg"
+            }
+        ],
+        "summary": "Experience a new chapter in the legendary horror series like never before. Clive Barker's Hellraiser: Revival takes first-person action horror survival to the next level. Wield the powers of the Genesis Configuration puzzle box to survive your bargain with the infamous Pinhead.",
+        "videos": [
+            {
+                "id": 156804,
+                "video_id": "E_4kAp6gsZE"
+            },
+            {
+                "id": 168679,
+                "video_id": "853GzhgIYVs"
+            },
+            {
+                "id": 170145,
+                "video_id": "ef1Vw3gwJek"
+            },
+            {
+                "id": 171549,
+                "video_id": "OeZhVTxZyao"
+            },
+            {
+                "id": 175911,
+                "video_id": "n0lSTJtp1Vs"
+            }
+        ]
+    },
+    {
         "id": 347638,
         "cover": {
             "id": 463270,
@@ -9789,117 +9908,6 @@
             {
                 "id": 177526,
                 "video_id": "EzD5rJJuCCA"
-            }
-        ]
-    },
-    {
-        "id": 356552,
-        "cover": {
-            "id": 473913,
-            "url": "//images.igdb.com/igdb/image/upload/t_thumb/coa5o9.jpg"
-        },
-        "first_release_date": 1798675200,
-        "genres": [
-            {
-                "id": 31,
-                "name": "Adventure"
-            }
-        ],
-        "involved_companies": [
-            {
-                "id": 331755,
-                "company": {
-                    "id": 946,
-                    "name": "Saber Interactive"
-                },
-                "developer": false
-            },
-            {
-                "id": 331756,
-                "company": {
-                    "id": 19126,
-                    "name": "Mad Head Games"
-                },
-                "developer": true
-            },
-            {
-                "id": 339716,
-                "company": {
-                    "id": 31014,
-                    "name": "Boss Team Games"
-                },
-                "developer": false
-            }
-        ],
-        "name": "Clive Barker's Hellraiser: Revival",
-        "platforms": [
-            {
-                "id": 169,
-                "abbreviation": "Series X|S",
-                "name": "Xbox Series X|S"
-            },
-            {
-                "id": 6,
-                "abbreviation": "PC",
-                "name": "PC (Microsoft Windows)"
-            },
-            {
-                "id": 167,
-                "abbreviation": "PS5",
-                "name": "PlayStation 5"
-            }
-        ],
-        "screenshots": [
-            {
-                "id": 1590092,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2x8.jpg"
-            },
-            {
-                "id": 1590093,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2x9.jpg"
-            },
-            {
-                "id": 1590094,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xa.jpg"
-            },
-            {
-                "id": 1590095,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xb.jpg"
-            },
-            {
-                "id": 1590096,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xc.jpg"
-            },
-            {
-                "id": 1590097,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xd.jpg"
-            },
-            {
-                "id": 1590098,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scy2xe.jpg"
-            }
-        ],
-        "summary": "Experience a new chapter in the legendary horror series like never before. Clive Barker's Hellraiser: Revival takes first-person action horror survival to the next level. Wield the powers of the Genesis Configuration puzzle box to survive your bargain with the infamous Pinhead.",
-        "videos": [
-            {
-                "id": 156804,
-                "video_id": "E_4kAp6gsZE"
-            },
-            {
-                "id": 168679,
-                "video_id": "853GzhgIYVs"
-            },
-            {
-                "id": 170145,
-                "video_id": "ef1Vw3gwJek"
-            },
-            {
-                "id": 171549,
-                "video_id": "OeZhVTxZyao"
-            },
-            {
-                "id": 175911,
-                "video_id": "n0lSTJtp1Vs"
             }
         ]
     },
@@ -10741,97 +10749,6 @@
         ]
     },
     {
-        "id": 338105,
-        "cover": {
-            "id": 480635,
-            "url": "//images.igdb.com/igdb/image/upload/t_thumb/coaauz.jpg"
-        },
-        "first_release_date": 1763596800,
-        "genres": [
-            {
-                "id": 10,
-                "name": "Racing"
-            },
-            {
-                "id": 31,
-                "name": "Adventure"
-            },
-            {
-                "id": 33,
-                "name": "Arcade"
-            }
-        ],
-        "involved_companies": [
-            {
-                "id": 313973,
-                "company": {
-                    "id": 70,
-                    "name": "Nintendo"
-                },
-                "developer": false
-            },
-            {
-                "id": 319939,
-                "company": {
-                    "id": 876,
-                    "name": "Sora"
-                },
-                "developer": true
-            },
-            {
-                "id": 319940,
-                "company": {
-                    "id": 22721,
-                    "name": "Bandai Namco Studios"
-                },
-                "developer": true
-            }
-        ],
-        "name": "Kirby Air Riders",
-        "platforms": [
-            {
-                "id": 508,
-                "abbreviation": "Switch 2",
-                "name": "Nintendo Switch 2"
-            }
-        ],
-        "screenshots": [
-            {
-                "id": 1496757,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scw2wl.jpg"
-            },
-            {
-                "id": 1618901,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scyp5h.jpg"
-            },
-            {
-                "id": 1618899,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scyp5f.jpg"
-            },
-            {
-                "id": 1618900,
-                "url": "//images.igdb.com/igdb/image/upload/t_thumb/scyp5g.jpg"
-            }
-        ],
-        "summary": "Kirby Air Riders is the long-awaited sequel to Kirby Air Ride on the Gamecube.\n\nPick your rider, pick your machine, and mount up for competition! Take on your rivals in frantic arena battles or fast-paced races on the ground and in the air. Use the Boost Charge button to brake and control your turns as your machine automatically fights for top speed. Fill your Boost Charge Gauge as you drift around the bend and release it to trigger an explosive dash!",
-        "total_rating": 88.71577651492348,
-        "total_rating_count": 11,
-        "videos": [
-            {
-                "id": 145016,
-                "video_id": "oJVsNMp_nAU"
-            },
-            {
-                "id": 159479,
-                "video_id": "QtkHiB7WKf4"
-            },
-            {
-                "id": 161837,
-                "video_id": "SJWif3ijbVI"
-            }
-        ]
-    },
-    {
         "id": 325600,
         "cover": {
             "id": 426967,
@@ -11209,6 +11126,63 @@
             {
                 "id": 146549,
                 "video_id": "rcxnRaZ6slU"
+            }
+        ]
+    },
+    {
+        "id": 381223,
+        "cover": {
+            "id": 513787,
+            "url": "//images.igdb.com/igdb/image/upload/t_thumb/cob0fv.jpg"
+        },
+        "first_release_date": 1830211200,
+        "genres": [
+            {
+                "id": 31,
+                "name": "Adventure"
+            }
+        ],
+        "involved_companies": [
+            {
+                "id": 365223,
+                "company": {
+                    "id": 29437,
+                    "name": "Wizards of the Coast"
+                },
+                "developer": false
+            },
+            {
+                "id": 364808,
+                "company": {
+                    "id": 72184,
+                    "name": "Invoke Studios"
+                },
+                "developer": true
+            }
+        ],
+        "name": "Warlock",
+        "platforms": [
+            {
+                "id": 169,
+                "abbreviation": "Series X|S",
+                "name": "Xbox Series X|S"
+            },
+            {
+                "id": 6,
+                "abbreviation": "PC",
+                "name": "PC (Microsoft Windows)"
+            },
+            {
+                "id": 167,
+                "abbreviation": "PS5",
+                "name": "PlayStation 5"
+            }
+        ],
+        "summary": "In Warlock, you take on the role of Kaatri, a veteran warrior, in a new third-person action-adventure set in a dark fantasy open world inspired by Dungeons & Dragons. Make a pact to wield forbidden magic to overcome a wide range of challenges. In exploration, every spell is a key that unlocks mysteries in a beautiful yet unsettling world. When facing enemies, magic and melee combine for a combat experience that is both tactical and visceral.",
+        "videos": [
+            {
+                "id": 170960,
+                "video_id": "ayW7oCXggoE"
             }
         ]
     }

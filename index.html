@@ -233,15 +233,13 @@
             setActiveNav('navHome');
             currentContext = 'home';
 
-            const token = localStorage.getItem('gs_user_id'); // Use user_id as token
-            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
             const homeContent = document.getElementById('homeContent');
-            if (!token) {
-                if (homeContent) homeContent.classList.add('hidden');
-                return;
-            }
             if (homeContent) homeContent.classList.remove('hidden');
+
+            const token = localStorage.getItem('gs_user_id'); // Use user_id as token
+            if (!token) return;
+
+            const headers = { 'Authorization': `Bearer ${token}` };
 
             const container = document.getElementById('homeNewReleases');
             const recsCache = categoryDataCache['recommendations'] || categoryDataCache['home'];
@@ -370,9 +368,13 @@
                 { id: 'all', name: 'All', value: 'all' },
                 { id: 'rpg', name: 'RPG', value: 'Role-playing (RPG)' },
                 { id: 'racing', name: 'Racing', value: 'Racing' },
-                { id: 'sport', name: 'Sport', value: 'Sport' },
                 { id: 'shooter', name: 'Shooter', value: 'Shooter' },
-                { id: 'strategy', name: 'Strategy', value: 'Strategy' }
+                { id: 'sport', name: 'Sport', value: 'Sport' },
+                { id: 'strategy', name: 'Strategy', value: 'Strategy' },
+                { id: 'fighting', name: 'Fighting', value: 'Fighting' },
+                { id: 'arcade', name: 'Arcade', value: 'Arcade' },
+                { id: 'simulator', name: 'Simulator', value: 'Simulator' },
+                { id: 'adventure', name: 'Adventure', value: 'Adventure' }
             ];
 
             container.innerHTML = genres.map(g => `
@@ -451,7 +453,6 @@
             setActiveNav(navId);
             currentContext = 'category';
             document.getElementById('gridTitle').innerText = title; // Changed from 'homeNewReleases'
-            document.getElementById('gridSubtitle').innerText = subtitle;
 
             // Reset pagination state immediately to prevent leakage from previous sections
             currentPage = 1;
@@ -459,8 +460,10 @@
             paginationContainer.classList.add('hidden');
             paginationContainer.innerHTML = '';
 
-            const filterContainer = document.getElementById('platformFilters');
+            const platformRow = document.getElementById('platformFilterRow');
+            const genreRow = document.getElementById('genreFilterRow');
 
+            const isGenreCat = !isNaN(id);
             const token = localStorage.getItem('gs_user_id'); // Use user_id as token
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
             const container = document.getElementById('resultsContainer'); // Changed from 'homeNewReleases'
@@ -473,12 +476,14 @@
                 if (mainContent) mainContent.scrollTop = 0;
 
                 // Ensure filters are visible for categories that support them
-                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming' || id === 'recommendations' || id === 'library') {
+                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming' || id === 'recommendations' || id === 'library' || isGenreCat) {
                     renderPlatformFilters();
                     renderGenreFilters();
-                    filterContainer.classList.remove('hidden');
-                    document.getElementById('genreFilters').classList.remove('hidden');
+                    if (platformRow) platformRow.classList.remove('hidden');
+                    // Hide genre filter bar if we are already in a specific genre category
+                    if (genreRow) genreRow.classList.toggle('hidden', isGenreCat);
                     currentGenreFilter = 'all';
+                    currentPlatformFilter = 'all';
                     filterByPlatform('all');
                 } else if (cachedGames.length > 0) {
                     renderPage('resultsContainer', 'gridPagination');
@@ -489,8 +494,8 @@
             }
 
             // Only show skeletons and hide filters if we truly have no data
-            filterContainer.classList.add('hidden');
-            document.getElementById('genreFilters').classList.add('hidden');
+            if (platformRow) platformRow.classList.add('hidden');
+            if (genreRow) genreRow.classList.add('hidden');
             container.innerHTML = renderSkeletons();
 
             try {
@@ -501,12 +506,13 @@
                 allCategoryGames = games;
                 cachedGames = games;
 
-                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming' || id === 'recommendations' || id === 'library') {
+                if (id === 'new-releases' || id === 'top' || id === 'trends' || id === 'upcoming' || id === 'recommendations' || id === 'library' || isGenreCat) {
                     renderPlatformFilters();
                     renderGenreFilters();
-                    filterContainer.classList.remove('hidden');
-                    document.getElementById('genreFilters').classList.remove('hidden');
+                    if (platformRow) platformRow.classList.remove('hidden');
+                    if (genreRow) genreRow.classList.toggle('hidden', isGenreCat);
                     currentGenreFilter = 'all';
+                    currentPlatformFilter = 'all';
                     filterByPlatform('all');
                 } else if (cachedGames.length === 0) {
                     container.innerHTML = '<div class="col-span-full py-20 text-center text-gray-500 uppercase tracking-widest text-xs">No entries found.</div>';
@@ -816,10 +822,12 @@
                         localStorage.setItem('gs_user_id', data.access_token); // Store user_id as token
                         localStorage.setItem('gs_user', data.username); // Store username for display
                         localStorage.setItem('gs_username', data.username); // Store username for display
+                        localStorage.setItem('gs_last_active', Date.now());
                         categoryDataCache = {}; // Clear cache on login to get personalized recs
                         updateUserDisplay();
                         await syncLibraryIds();
                         closeAuthModal();
+                        showTempMessage(`Logged in successfully as ${data.username}`, 2000);
                         prefetchAllCategories();
                         loadHome();
                     } else {
@@ -881,7 +889,7 @@
                 userLibraryIds.add(gameId);
                 updateLibraryButtons(gameId, true);
                 // Invalidate library and home cache as data has changed
-                delete categoryDataCache['library'];
+                // Removed: delete categoryDataCache['library'];
                 delete categoryDataCache['home'];
                 delete categoryDataCache['recommendations'];
 
@@ -911,7 +919,7 @@
                 userLibraryIds.delete(gameId);
                 updateLibraryButtons(gameId, false);
                 // Invalidate library and home cache as data has changed
-                delete categoryDataCache['library'];
+                // Removed: delete categoryDataCache['library'];
                 delete categoryDataCache['home'];
                 delete categoryDataCache['recommendations'];
 
@@ -1075,6 +1083,10 @@
         function loadTrends() { loadCategory('trends', 'TRENDING NOW', 'What the gaming community is buzzing about today.', 'navTrends'); }
         function loadUpcoming() { loadCategory('upcoming', 'UPCOMING', 'Future hits to keep on your radar.', 'navUpcoming'); }
 
+        async function exploreGenre(genreValue, numericId) {
+            await loadCategory(numericId, genreValue.toUpperCase(), `Top ${genreValue} titles.`, 'navHome');
+        }
+
         function toggleSidebar(show) {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
@@ -1132,6 +1144,7 @@
             localStorage.removeItem('gs_user_id');
             localStorage.removeItem('gs_user');
             localStorage.removeItem('gs_username');
+            localStorage.removeItem('gs_last_active');
             categoryDataCache = {};
             userLibraryIds.clear();
             updateUserDisplay();
@@ -1139,6 +1152,12 @@
             showTempMessage(`You have been logged out from ${user}.`, 2000);
             loadHome();
         }
+
+        window.addEventListener('beforeunload', () => {
+            if (localStorage.getItem('gs_user_id')) {
+                localStorage.setItem('gs_last_active', Date.now());
+            }
+        });
 
         function showTempMessage(message, duration = 2000) {
             const overlay = document.getElementById('tempMessageOverlay');
@@ -1155,6 +1174,16 @@
 
 
         window.onload = async () => {
+            const lastActive = localStorage.getItem('gs_last_active');
+            if (lastActive && localStorage.getItem('gs_user_id')) {
+                if (Date.now() - parseInt(lastActive) > 3600000) { // 1 hour in ms
+                    localStorage.removeItem('gs_token');
+                    localStorage.removeItem('gs_user_id');
+                    localStorage.removeItem('gs_user');
+                    localStorage.removeItem('gs_username');
+                    localStorage.removeItem('gs_last_active');
+                }
+            }
             updateUserDisplay(); // Set initial avatar state
             await syncLibraryIds();
             loadHome();
@@ -1199,7 +1228,7 @@
     <div class="flex flex-1 relative overflow-hidden">
         <!-- Sidebar -->
         <aside
-            class="fixed lg:sticky top-0 lg:top-0 left-0 z-[60] lg:z-40 bg-[#1f1f23] border-r border-white/10 shadow-2xl flex flex-col pb-6 font-inter text-sm font-bold uppercase w-[240px] lg:w-[180px] lg:h-[calc(100vh-41px)] transition-transform duration-300 -translate-x-full lg:translate-x-0 pt-2 h-full"
+            class="fixed lg:sticky top-0 lg:top-0 left-0 z-[60] lg:z-40 bg-[#1f1f23] border-r border-white/10 shadow-2xl flex flex-col pb-6 font-inter text-sm font-bold uppercase w-[250px] lg:w-[180px] lg:h-[calc(100vh-41px)] transition-transform duration-300 -translate-x-full lg:translate-x-0 pt-2 h-full"
             id="sidebar">
             <div class="lg:hidden px-4 mb-6 flex justify-between items-center">
                 <span class="text-white italic font-black">Menu</span>
@@ -1284,30 +1313,29 @@
                             <div>
                                 <h2 class="text-2xl font-black text-white uppercase tracking-[0.2em] italic mb-2">
                                     Explore by Genre</h2>
-                                <div class="h-1 w-20 bg-purple-600 rounded-full"></div>
                             </div>
                             <button onclick="loadRecommendedAll()"
-                                class="text-purple-400 hover:text-purple-300 text-xs font-black uppercase tracking-widest flex items-center gap-2 group transition-all">
+                                class="text-purple-400 hover:text-purple-300 text-xs font-black uppercase tracking-widest flex items-center gap-2 group transition-all shrink-0">
                                 Personalized Feed <span
                                     class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">arrow_forward</span>
                             </button>
                         </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-4 gap-6">
+                        <div
+                            class="flex overflow-x-auto gap-6 pb-8 pt-10 -mt-16 -mb-12 pl-12 pr-10 -ml-12 -mr-12 snap-x snap-mandatory custom-scrollbar scroll-pl-14">
                             <!-- RPG Card -->
-                            <div
-                                class="relative h-[400px] rounded-3xl overflow-hidden group cursor-pointer border border-white/10 transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50">
-                                <img src="https://images.unsplash.com/photo-1514539079130-25950c84af65?q=80&w=2069&auto=format&fit=crop"
-                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:brightness-110"
+                            <div onclick="exploreGenre('Role-playing (RPG)', '12')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
+                                <img src="https://i.pinimg.com/736x/6f/57/c7/6f57c7e116e497d6a9aa736c04b612ae.jpg"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
                                     alt="RPG">
                                 <div
-                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 group-hover:from-purple-900/20 transition-colors duration-500">
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
                                 </div>
                                 <div class="absolute inset-0 flex items-center justify-center p-6">
                                     <div
-                                        class="w-full py-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-white/10 group-hover:border-white/20 group-hover:scale-105">
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
                                         <span
-                                            class="text-3xl font-black text-white italic tracking-tighter uppercase">RPG</span>
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">RPG</span>
                                         <span
                                             class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">The
                                             Legend Awaits</span>
@@ -1316,19 +1344,19 @@
                             </div>
 
                             <!-- Shooter Card -->
-                            <div
-                                class="relative h-[400px] rounded-3xl overflow-hidden group cursor-pointer border border-white/10 transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50">
+                            <div onclick="exploreGenre('Shooter', '5')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://w0.peakpx.com/wallpaper/954/59/HD-wallpaper-battlefield-battlefield-3.jpg"
-                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:brightness-110"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
                                     alt="Shooter">
                                 <div
-                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 group-hover:from-purple-900/20 transition-colors duration-500">
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
                                 </div>
                                 <div class="absolute inset-0 flex items-center justify-center p-6">
                                     <div
-                                        class="w-full py-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-white/10 group-hover:border-white/20 group-hover:scale-105">
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
                                         <span
-                                            class="text-3xl font-black text-white italic tracking-tighter uppercase">Shooter</span>
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Shooter</span>
                                         <span
                                             class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Master
                                             the Craft</span>
@@ -1337,19 +1365,19 @@
                             </div>
 
                             <!-- Racing Card -->
-                            <div
-                                class="relative h-[400px] rounded-3xl overflow-hidden group cursor-pointer border border-white/10 transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50">
+                            <div onclick="exploreGenre('Racing', '10')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://wallpapercat.com/w/full/d/4/3/1506648-1080x1920-samsung-full-hd-racing-game-wallpaper.jpg"
-                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:brightness-110"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
                                     alt="Racing">
                                 <div
-                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 group-hover:from-purple-900/20 transition-colors duration-500">
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
                                 </div>
                                 <div class="absolute inset-0 flex items-center justify-center p-6">
                                     <div
-                                        class="w-full py-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-white/10 group-hover:border-white/20 group-hover:scale-105">
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
                                         <span
-                                            class="text-3xl font-black text-white italic tracking-tighter uppercase">Racing</span>
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Racing</span>
                                         <span
                                             class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Full
                                             Throttle</span>
@@ -1358,22 +1386,127 @@
                             </div>
 
                             <!-- Sport Card -->
-                            <div
-                                class="relative h-[400px] rounded-3xl overflow-hidden group cursor-pointer border border-white/10 transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50">
+                            <div onclick="exploreGenre('Sport', '14')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
                                 <img src="https://img.magnific.com/free-photo/soccer-sport-environment-filed_23-2151891691.jpg"
-                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 group-hover:brightness-110"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
                                     alt="Sport">
                                 <div
-                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 group-hover:from-purple-900/20 transition-colors duration-500">
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
                                 </div>
                                 <div class="absolute inset-0 flex items-center justify-center p-6">
                                     <div
-                                        class="w-full py-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-white/10 group-hover:border-white/20 group-hover:scale-105">
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
                                         <span
-                                            class="text-3xl font-black text-white italic tracking-tighter uppercase">Sport</span>
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Sport</span>
                                         <span
                                             class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Be
                                             the Champion</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Strategy Card -->
+                            <div onclick="exploreGenre('Strategy', '15')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
+                                <img src="https://wallpapercave.com/wp/wp7570046.jpg"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
+                                    alt="Strategy">
+                                <div
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
+                                </div>
+                                <div class="absolute inset-0 flex items-center justify-center p-6">
+                                    <div
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
+                                        <span
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Strategy</span>
+                                        <span
+                                            class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Master
+                                            the Plan</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Fighting Card -->
+                            <div onclick="exploreGenre('Fighting', '4')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
+                                <img src="https://i.pinimg.com/474x/f8/6c/51/f86c51a9f0b99dd67678c25dfa2cdafa.jpg"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
+                                    alt="Fighting">
+                                <div
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
+                                </div>
+                                <div class="absolute inset-0 flex items-center justify-center p-6">
+                                    <div
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
+                                        <span
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Fighting</span>
+                                        <span
+                                            class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Face
+                                            Your Fate</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Adventure Card -->
+                            <div onclick="exploreGenre('Adventure', '31')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
+                                <img src="https://i.pinimg.com/736x/c7/2a/e1/c72ae1449b7718cc2c5fd6203e2bc493.jpg"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
+                                    alt="Adventure">
+                                <div
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
+                                </div>
+                                <div class="absolute inset-0 flex items-center justify-center p-6">
+                                    <div
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
+                                        <span
+                                            class="text-[26px] font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Adventure</span>
+                                        <span
+                                            class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Discover
+                                            the World</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Arcade Card -->
+                            <div onclick="exploreGenre('Arcade', '33')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
+                                <img src="https://w0.peakpx.com/wallpaper/141/581/HD-wallpaper-arcade-arcade-cabinet-video-games-indoors-capcom-japan.jpg"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
+                                    alt="Arcade">
+                                <div
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
+                                </div>
+                                <div class="absolute inset-0 flex items-center justify-center p-6">
+                                    <div
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
+                                        <span
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Arcade</span>
+                                        <span
+                                            class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Pure
+                                            Nostalgia</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Simulator Card -->
+                            <div onclick="exploreGenre('Simulator', '13')"
+                                class="relative h-[350px] w-[225px] rounded-3xl overflow-hidden group cursor-pointer border border-black transition-all duration-500 hover:scale-[1.02] hover:shadow-[0_0_50px_-10px_rgba(147,51,234,0.5)] hover:border-purple-600/50 snap-start shrink-0">
+                                <img src="https://w0.peakpx.com/wallpaper/387/137/HD-wallpaper-iracing-indy-car-games-pc-race-car-racing-sim-simulation.jpg"
+                                    class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:brightness-110"
+                                    alt="Simulator">
+                                <div
+                                    class="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 group-hover:from-purple-1000/5 transition-colors duration-500">
+                                </div>
+                                <div class="absolute inset-0 flex items-center justify-center p-6">
+                                    <div
+                                        class="w-[175px] py-5 bg-black/25 backdrop-blur-[1.5px] border border-black/10 rounded-2xl flex flex-col items-center justify-center transition-all duration-500 group-hover:bg-black/50 group-hover:border-black/10 group-hover:scale-105">
+                                        <span
+                                            class="text-3xl font-black text-white italic tracking-tighter uppercase drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Simulator</span>
+                                        <span
+                                            class="text-[9px] text-purple-400 font-black tracking-[0.4em] uppercase mt-3 opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-2 group-hover:translate-y-0 drop-shadow-[1px_1px_1px_rgba(0,0,0,1)]">Live
+                                            the Reality</span>
                                     </div>
                                 </div>
                             </div>
@@ -1382,11 +1515,9 @@
                 </section>
                 <!-- Search Interface -->
                 <section class="hidden" id="search-interface">
-                    <div class="mb-8">
+                    <div class="mb-12">
                         <h1 class="text-3xl sm:text-4xl md:text-[2.5rem] font-black text-white mb-2 tracking-tighter"
                             id="searchViewTitle">DISCOVER <span class="text-purple-500">TITLES</span></h1>
-                        <p class="text-gray-400 font-inter max-w-2xl" id="searchViewSubtitle">Search through millions of
-                            games in the IGDB database.</p>
                     </div>
                     <!-- Search Bar Container - Persistent -->
                     <div class="relative max-w-2xl group mb-4 z-20" id="search-bar-container">
@@ -1422,11 +1553,18 @@
                 <section class="hidden" id="results-grid">
                     <h1 class="text-3xl sm:text-4xl md:text-[2.5rem] font-black text-white mb-2 tracking-tighter uppercase"
                         id="gridTitle"></h1>
-                    <div class="flex flex-col gap-4 mb-8 border-b border-white/5 pb-6">
-                        <p class="text-gray-400 font-inter max-w-2xl" id="gridSubtitle"></p>
-                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div id="platformFilters" class="flex flex-wrap gap-2 hidden"></div>
-                            <div id="genreFilters" class="flex flex-wrap gap-2 hidden"></div>
+                    <div class="flex flex-col gap-4 mt-6 mb-8 border-b border-white/5 pb-6">
+                        <div class="flex flex-col gap-6">
+                            <div id="platformFilterRow" class="flex flex-col md:flex-row md:items-center gap-4 hidden">
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-widest md:w-32">Platform
+                                    Filter</span>
+                                <div id="platformFilters" class="flex flex-wrap gap-2"></div>
+                            </div>
+                            <div id="genreFilterRow" class="flex flex-col md:flex-row md:items-center gap-4 hidden">
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-widest md:w-32">Genre
+                                    Filter</span>
+                                <div id="genreFilters" class="flex flex-wrap gap-2"></div>
+                            </div>
                         </div>
                     </div>
                     <div class="responsive-grid" id="resultsContainer"></div>
