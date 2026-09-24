@@ -138,6 +138,102 @@
             border-radius: 10px;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // ===== Supabase backend connection =====
+        // Fill these in from Supabase Dashboard -> Project Settings -> API.
+        // The anon key is safe to publish: Row Level Security protects the data.
+        const SUPABASE_URL = 'https://lzakjxdkbhnsaxmspguj.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6YWtqeGRrYmhuc2F4bXNwZ3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzAyMDUsImV4cCI6MjEwNTg0NjIwNX0.lTuik4RkTjpNwhUAPHqRMwCcncUePlc82MqcL1aN25c';
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Supabase Auth works with emails, so each username maps to an internal address.
+        const USERNAME_EMAIL_DOMAIN = 'users.gamesense.app';
+        const usernameToEmail = (u) => `${u.trim().toLowerCase()}@${USERNAME_EMAIL_DOMAIN}`;
+
+        // Minimal Response-like object so the existing UI code keeps working unchanged.
+        function apiResponse(data, status = 200) {
+            return {
+                ok: status >= 200 && status < 300,
+                status,
+                headers: { get: () => 'application/json' },
+                json: async () => data,
+                text: async () => JSON.stringify(data),
+            };
+        }
+
+        async function callApi(payload) {
+            const { data, error } = await sb.functions.invoke('igdb', { body: payload });
+            if (error) {
+                let status = error.context?.status ?? 500;
+                let detail = error.message;
+                try { detail = (await error.context.json()).detail ?? detail; } catch (_) { }
+                return apiResponse({ detail }, status);
+            }
+            return apiResponse(data);
+        }
+
+        /**
+         * Routes the old REST paths (/search, /category, /library, /login...) to Supabase:
+         * - game data goes through the "igdb" Edge Function,
+         * - auth goes through Supabase Auth,
+         * - library add/remove/ids go straight to Postgres, protected by RLS.
+         */
+        async function apiFetch(path, options = {}) {
+            const method = (options.method || 'GET').toUpperCase();
+            let m;
+
+            if (path === '/login' || path === '/register') {
+                const { username, password } = JSON.parse(options.body || '{}');
+                if (!/^[A-Za-z0-9_.-]+$/.test(username || '')) {
+                    return apiResponse({ detail: 'Username can only contain letters, numbers, _ . and -' }, 400);
+                }
+                const email = usernameToEmail(username);
+                if (path === '/register') {
+                    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { username } } });
+                    if (error) {
+                        const taken = /already/i.test(error.message);
+                        return apiResponse({ detail: taken ? 'Username already registered' : error.message }, 400);
+                    }
+                    // If email confirmation is off, signUp logs the user in; keep the old "register, then login" flow.
+                    if (data.session) await sb.auth.signOut();
+                    return apiResponse({ message: 'User created successfully' });
+                }
+                const { data, error } = await sb.auth.signInWithPassword({ email, password });
+                if (error) return apiResponse({ detail: 'Invalid credentials' }, 401);
+                const displayName = data.user.user_metadata?.username || username;
+                return apiResponse({ access_token: data.user.id, token_type: 'bearer', username: displayName });
+            }
+
+            if (path === '/library/ids') {
+                const { data, error } = await sb.from('library_items').select('game_id');
+                if (error) return apiResponse([], 200);
+                return apiResponse(data.map(r => Number(r.game_id)));
+            }
+            if ((m = path.match(/^\/library\/add\/(\d+)$/)) && method === 'POST') {
+                const { data: { user } } = await sb.auth.getUser();
+                if (!user) return apiResponse({ detail: 'Authentication required' }, 401);
+                const { error } = await sb.from('library_items').insert({ user_id: user.id, game_id: Number(m[1]) });
+                if (error) return apiResponse({ detail: error.code === '23505' ? 'Game already in library' : error.message }, 400);
+                return apiResponse({ message: 'Added to library' });
+            }
+            if ((m = path.match(/^\/library\/remove\/(\d+)$/)) && method === 'DELETE') {
+                const { error } = await sb.from('library_items').delete().eq('game_id', Number(m[1]));
+                if (error) return apiResponse({ detail: error.message }, 400);
+                return apiResponse({ message: 'Removed from library' });
+            }
+            if (path === '/library') return callApi({ action: 'library' });
+            if (path === '/recommendations') return callApi({ action: 'recommendations' });
+            if ((m = path.match(/^\/search\/(.+)$/))) return callApi({ action: 'search', q: decodeURIComponent(m[1]) });
+            if ((m = path.match(/^\/category\/(.+)$/))) return callApi({ action: 'category', id: decodeURIComponent(m[1]) });
+
+            return apiResponse({ detail: 'Not found' }, 404);
+        }
+
+        function clearLocalSession() {
+            ['gs_token', 'gs_user_id', 'gs_user', 'gs_username', 'gs_last_active'].forEach(k => localStorage.removeItem(k));
+        }
+    </script>
     <script>
         let cachedGames = [];
         let allCategoryGames = [];
@@ -269,7 +365,7 @@
                 prefetchCategory('library');
                 prefetchCategory('recommendations');
 
-                const response = await fetch('/recommendations', { headers });
+                const response = await apiFetch('/recommendations', { headers });
                 const games = await response.json();
                 categoryDataCache['home'] = games;
                 allCategoryGames = games;
@@ -302,7 +398,7 @@
             const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
             try {
                 const endpoint = id === 'library' ? '/library' : (id === 'recommendations' ? '/recommendations' : `/category/${id}`);
-                const response = await fetch(endpoint, { headers });
+                const response = await apiFetch(endpoint, { headers });
                 const games = await response.json();
                 categoryDataCache[id] = games;
 
@@ -326,7 +422,7 @@
             container.innerHTML = renderSkeletons();
 
             try {
-                const response = await fetch(`/search/${encodeURIComponent(input)}`);
+                const response = await apiFetch(`/search/${encodeURIComponent(input)}`);
                 const games = await response.json();
                 allCategoryGames = games;
                 cachedGames = games;
@@ -515,7 +611,7 @@
 
             try {
                 const endpoint = (id === 'library') ? '/library' : (id === 'recommendations' ? '/recommendations' : `/category/${id}`);
-                const response = await fetch(endpoint, { headers });
+                const response = await apiFetch(endpoint, { headers });
                 const games = await response.json();
                 categoryDataCache[id] = games;
                 allCategoryGames = games;
@@ -815,7 +911,7 @@
             }
 
             try {
-                const res = await fetch(`/${authMode}`, {
+                const res = await apiFetch(`/${authMode}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: u, password: p })
@@ -861,7 +957,7 @@
             const userId = localStorage.getItem('gs_user_id');
             if (!userId) { userLibraryIds.clear(); return; }
             try {
-                const res = await fetch('/library/ids', { headers: { 'Authorization': `Bearer ${userId}` } });
+                const res = await apiFetch('/library/ids', { headers: { 'Authorization': `Bearer ${userId}` } });
                 const ids = await res.json();
                 userLibraryIds = new Set(ids);
             } catch (e) { console.error("Library sync failed:", e); }
@@ -897,7 +993,7 @@
         async function addToLibrary(gameId) {
             const userId = localStorage.getItem('gs_user_id'); // Get user_id from localStorage
             if (!userId) { openAuthModal(); return; }
-            const res = await fetch(`/library/add/${gameId}`, { // Corrected endpoint to use gameId
+            const res = await apiFetch(`/library/add/${gameId}`, { // Corrected endpoint to use gameId
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${userId}` } // Send user_id as Bearer token
             });
@@ -928,7 +1024,7 @@
             const gameId = gameIdToRemove;
             const userId = localStorage.getItem('gs_user_id');
             if (!userId) return;
-            const res = await fetch(`/library/remove/${gameId}`, {
+            const res = await apiFetch(`/library/remove/${gameId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${userId}` }
             });
@@ -1158,6 +1254,7 @@
 
         async function confirmLogout() {
             const user = localStorage.getItem('gs_user');
+            await sb.auth.signOut();
             localStorage.removeItem('gs_token');
             localStorage.removeItem('gs_user_id');
             localStorage.removeItem('gs_user');
@@ -1195,6 +1292,7 @@
             const lastActive = localStorage.getItem('gs_last_active');
             if (lastActive && localStorage.getItem('gs_user_id')) {
                 if (Date.now() - parseInt(lastActive) > 3600000) { // 1 hour in ms
+                    await sb.auth.signOut();
                     localStorage.removeItem('gs_token');
                     localStorage.removeItem('gs_user_id');
                     localStorage.removeItem('gs_user');
@@ -1202,6 +1300,8 @@
                     localStorage.removeItem('gs_last_active');
                 }
             }
+            const { data: { session } } = await sb.auth.getSession();
+            if (!session) clearLocalSession();
             updateUserDisplay(); // Set initial avatar state
             await syncLibraryIds();
             loadHome();

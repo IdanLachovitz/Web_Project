@@ -1,0 +1,20 @@
+# Free Supabase projects pause after 7 days without traffic.
+# This pings the API every 3 days (and refreshes the game cache as a bonus).
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "0 6 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the igdb Edge Function
+        run: |
+          curl --fail -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/igdb" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"category","id":"new-releases"}' -o /dev/null
