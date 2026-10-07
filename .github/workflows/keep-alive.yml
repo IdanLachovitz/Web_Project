@@ -12,9 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Call the igdb Edge Function
+        # A missing secret used to make curl hit "/functions/v1/igdb" and die
+        # with a cryptic exit code 3 (malformed URL); say what's wrong instead.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl --fail -sS -X POST "${{ secrets.SUPABASE_URL }}/functions/v1/igdb" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the SUPABASE_URL and SUPABASE_ANON_KEY repo secrets (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          curl --fail -sS -X POST "$SUPABASE_URL/functions/v1/igdb" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
             -H "Content-Type: application/json" \
             -d '{"action":"category","id":"new-releases"}' -o /dev/null
