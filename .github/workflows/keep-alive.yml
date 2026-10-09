@@ -1,0 +1,29 @@
+# Free Supabase projects pause after 7 days without traffic.
+# This pings the API every 3 days (and refreshes the game cache as a bonus).
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "0 6 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the igdb Edge Function
+        # A missing secret used to make curl hit "/functions/v1/igdb" and die
+        # with a cryptic exit code 3 (malformed URL); say what's wrong instead.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the SUPABASE_URL and SUPABASE_ANON_KEY repo secrets (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          curl --fail -sS -X POST "$SUPABASE_URL/functions/v1/igdb" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"action":"category","id":"new-releases"}' -o /dev/null

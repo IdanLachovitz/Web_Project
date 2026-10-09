@@ -1,26 +1,41 @@
 import requests
 import os
-import re
-import functools
 import sqlite3
 import hashlib
 import time
-from fastapi import FastAPI, HTTPException, Depends, status, Header
-from concurrent.futures import ThreadPoolExecutor
+import threading
+from fastapi import FastAPI, HTTPException, Depends, status, Header, BackgroundTasks
 from dotenv import load_dotenv
 from fastapi.responses import HTMLResponse
-from datetime import datetime
+from datetime import datetime, timedelta
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import math
 
-# Load environment variables from the .env file
+# Load environment variables from the .env file.
 load_dotenv()
+
+# Global Priority for choosing the "Main" genre across the site
+GENRE_PRIORITY = ["Shooter", "Racing", "Strategy", "Role-playing (RPG)", "Fighting", "Sport", "Arcade", "Simulator", "Adventure"]
 
 # --- Database Setup (SQLite) ---
 DATABASE_FILE = "gamesense.db"
+
+# --- Server-Side Caching ---
+GLOBAL_DATA_CACHE = {} # Stores (data, timestamp)
+
+def get_cached_data(key, ttl=1800):
+    """Retrieve data from cache if it hasn't expired (default 30 mins)."""
+    if key in GLOBAL_DATA_CACHE:
+        data, ts = GLOBAL_DATA_CACHE[key]
+        if time.time() - ts < ttl:
+            return data
+    return None
+
+def set_cached_data(key, data):
+    GLOBAL_DATA_CACHE[key] = (data, time.time())
 
 def get_db_connection():
     conn = sqlite3.connect(DATABASE_FILE)
@@ -44,6 +59,14 @@ def init_db():
             game_id INTEGER NOT NULL,
             UNIQUE(user_id, game_id),
             FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cached_games (
+            game_id INTEGER,
+            category TEXT,
+            game_json TEXT,
+            PRIMARY KEY (game_id, category)
         );
     """)
     conn.commit()
@@ -72,7 +95,6 @@ def get_current_user_id(authorization: Optional[str] = Header(None)):
 # Twitch/IGDB Credentials
 CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
 CLIENT_SECRET = os.getenv("TWITCH_CLIENT_SECRET")
-ITAD_API_KEY = os.getenv("ITAD_API_KEY")
 
 app = FastAPI()
 
@@ -84,147 +106,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class GamePriceService:
-    def __init__(self, client_id, client_secret, itad_api_key=None):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.itad_api_key = itad_api_key
-        
-        # CheapShark API Endpoints
-        self.igdb_url = "https://api.igdb.com/v4/games"
-        self.cheapshark_games_url = "https://www.cheapshark.com/api/1.0/games"
-        self.cheapshark_deals_url = "https://www.cheapshark.com/api/1.0/deals"
-        self.headers = {"User-Agent": "GameSense/1.0"}
-
-
-    def _get_token(self):
-        auth_url = f"https://id.twitch.tv/oauth2/token?client_id={self.client_id}&client_secret={self.client_secret}&grant_type=client_credentials"
-        try:
-            r = requests.post(auth_url, headers=self.headers, timeout=5)
-            return r.json().get("access_token")
-        except: return None
-
-    def _fetch_itad_price(self, game_name):
-        """Fetches prices from IsThereAnyDeal for multiple platforms."""
-        platform_prices = {"PC": "N/A", "PlayStation": "N/A", "Xbox": "N/A"}
-        if not self.itad_api_key:
-            return platform_prices
-
-        try:
-            # 1. Search for Game UUID
-            search_url = f"https://api.isthereanydeal.com/games/search/v1?key={self.itad_api_key}&title={game_name}"
-            search_res = requests.get(search_url, timeout=5)
-            search_data = search_res.json()
-            
-            results = search_data.get("results", []) if isinstance(search_data, dict) else search_data
-            if not results:
-                return platform_prices
-            
-            game_id = results[0].get('uuid') or results[0].get('id')
-            
-            # 2. Get Prices for that UUID
-            price_url = f"https://api.isthereanydeal.com/games/prices/v2?key={self.itad_api_key}&uuids={game_id}&nondeals=1"
-            price_res = requests.get(price_url, timeout=5)
-            price_data = price_res.json()
-            
-            # Extract deals list
-            deals = price_data.get("data", {}).get(game_id, {}).get("list", [])
-            
-            for deal in deals:
-                shop_name = deal.get("shop", {}).get("name", "").lower()
-                price_val = deal.get("price_new") or deal.get("price_old")
-                
-                if price_val is not None:
-                    formatted_price = f"${float(price_val):.2f}"
-                    
-                    # Simple shop-to-platform mapping
-                    if any(x in shop_name for x in ["steam", "gog", "epic", "humble"]):
-                        if platform_prices["PC"] == "N/A": platform_prices["PC"] = formatted_price
-                    elif "playstation" in shop_name:
-                        if platform_prices["PlayStation"] == "N/A": platform_prices["PlayStation"] = formatted_price
-                    elif "xbox" in shop_name or "microsoft" in shop_name:
-                        if platform_prices["Xbox"] == "N/A": platform_prices["Xbox"] = formatted_price
-
-        except Exception as e:
-            print(f"ITAD Error for {game_name}: {e}")
-        
-        return platform_prices
-
-    @functools.lru_cache(maxsize=128)
-    def fetchPrices(self, game_name):
-        # Start with ITAD for multi-platform coverage
-        prices = self._fetch_itad_price(game_name)
-        
-        # Fallback to CheapShark for PC if ITAD failed to find a PC price
-        if prices["PC"] == "N/A":
-            pc_price = self._fetch_cheapshark_pc_price(game_name)
-            if pc_price != "N/A":
-                prices["PC"] = pc_price
-                
-        return {"game": game_name, "live_prices": prices}
-
-    def _fetch_cheapshark_pc_price(self, game_name):
-        """Fallback helper for PC prices using CheapShark."""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        query_name = re.sub(r'\s*[\(\[].*?[\)\]]', '', game_name).strip()
-        try:
-            search_res = requests.get(
-                self.cheapshark_games_url, 
-                params={"title": query_name}, 
-                headers=headers, 
-                timeout=5
-            )
-            
-            if search_res.status_code == 200:
-                search_data = search_res.json()
-                if not search_data:
-                    return "N/A" # Return N/A if no game found on CheapShark
-                
-                # Get the internal CheapShark ID for the best match
-                cheapshark_game_id = search_data[0].get('gameID')
-
-                lookup_res = requests.get(
-                    self.cheapshark_games_url, 
-                    params={"id": cheapshark_game_id}, 
-                    headers=headers, 
-                    timeout=5
-                )
-                lookup_res.raise_for_status() # Raise an exception for HTTP errors
-                
-                if lookup_res.status_code == 200:
-                    game_info = lookup_res.json()
-                    
-                    # Initialize pc_price_str for this scope
-                    pc_price_str = "N/A"
-
-                    # The price for the overall cheapest deal is usually here:
-                    cheapest_price = game_info.get('cheapestPriceEver', {}).get('price')
-                    
-                    # Alternatively, check current active deals list
-                    deals = game_info.get('deals', [])
-                    if deals:
-                        # Find the lowest price among current active deals
-                        current_min = min(float(d['price']) for d in deals if 'price' in d)
-                        pc_price_str = f"${current_min:.2f}"
-                    elif cheapest_price:
-                        pc_price_str = f"${float(cheapest_price):.2f}"
-                    return pc_price_str
-
-        except requests.exceptions.RequestException as e:
-            print(f"DEBUG CheapShark Request Error for {game_name}: {e}")
-        except Exception as e:
-            print(f"DEBUG CheapShark Processing Error for {game_name}: {e}")
-        return "N/A" # Default return if anything fails
-
-@app.get("/api/v1/game-price-check")
-def api_price_check(q: str):
-    """
-    Exposes the GamePriceService via a clean API endpoint.
-    """
-    return global_price_service.fetchPrices(q)
 
 # Global cache for the Twitch token
 _token_cache = {"token": None, "expires_at": 0}
@@ -253,6 +134,103 @@ def get_access_token():
     except Exception as e:
         return None
 
+def store_games_in_db(games, category):
+    """Saves processed game objects into the database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Clear existing cache for this category to keep it fresh
+    cursor.execute("DELETE FROM cached_games WHERE category = ?", (category,))
+    
+    for game in games:
+        cursor.execute(
+            "INSERT OR REPLACE INTO cached_games (game_id, category, game_json) VALUES (?, ?, ?)",
+            (game["id"], category, json.dumps(game))
+        )
+    conn.commit()
+    conn.close()
+
+def fetch_and_store_category(cat_id: str):
+    """Internal helper to fetch data from IGDB and update local DB."""
+    token = get_access_token()
+    if not token:
+        return
+
+    url = "https://api.igdb.com/v4/games"
+    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+    current_time = int(time.time())
+
+    base_fields = (
+        "fields name, summary, total_rating, total_rating_count, first_release_date, "
+        "cover.url, platforms.name, platforms.abbreviation, genres.name, "
+        "screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name;"
+    )
+
+    if cat_id == "new-releases":
+        filters = f"where first_release_date <= {current_time} & first_release_date > 0 & cover != null;"
+        sorting = "sort first_release_date desc;"
+    elif cat_id == "top":
+        filters = f"where version_parent = null & total_rating_count > 200 & total_rating > 80 & cover != null;"
+        sorting = "sort total_rating desc;"
+    elif cat_id == "trends":
+        filters = f"where version_parent = null & hypes > 10 & first_release_date > {int(time.time()) - (180 * 24 * 60 * 60)} & cover != null;"
+        sorting = "sort hypes desc;"
+    elif cat_id == "upcoming":
+        filters = f"where first_release_date > {current_time} & version_parent = null & cover != null;"
+        sorting = "sort first_release_date asc;"
+    else:
+        return
+
+    query = f"{base_fields} {filters} {sorting} limit 250;" # Increased limit for local storage
+
+    try:
+        response = requests.post(url, headers=headers, data=query)
+        response.raise_for_status()
+        raw_data = response.json()
+        processed_data = process_game_data(raw_data)
+        
+        if cat_id == "top":
+            processed_data.sort(key=calculate_top_100, reverse=True)
+
+        store_games_in_db(processed_data, cat_id)
+        print(f"Successfully refreshed {cat_id} in database.")
+    except Exception as e:
+        print(f"Error refreshing {cat_id}: {e}")
+
+def refresh_all_games():
+    """Runs the refresh for all categories."""
+    print("Starting daily database refresh...")
+    categories = ["top", "trends", "upcoming", "new-releases"]
+    for cat in categories:
+        fetch_and_store_category(cat)
+    print("Daily refresh complete.")
+
+def scheduler_loop():
+    """Background loop that waits until 8:00 AM every day."""
+    while True:
+        now = datetime.now()
+        # Target is 8:00 AM today
+        target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        
+        # If 8 AM has already passed today, target 8 AM tomorrow
+        if now >= target:
+            target += timedelta(days=1)
+        
+        sleep_seconds = (target - now).total_seconds()
+        print(f"Next database refresh scheduled for {target} (in {round(sleep_seconds/3600, 2)} hours)")
+        
+        # Sleep until 8 AM (check every hour to be safe, or just sleep the whole duration)
+        time.sleep(sleep_seconds)
+        refresh_all_games()
+        # Sleep for a minute to ensure we don't trigger twice in the same minute
+        time.sleep(61)
+
+# Start the scheduler in a separate daemon thread so it doesn't block the web server
+@app.on_event("startup")
+def start_scheduler():
+    thread = threading.Thread(target=scheduler_loop, daemon=True)
+    thread.start()
+    # Also trigger an initial refresh if DB is empty
+    threading.Thread(target=refresh_all_games, daemon=True).start()
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
@@ -262,8 +240,19 @@ def read_root():
     except FileNotFoundError:
         return "<h1>Error: index.html not found in project directory.</h1>"
 
+def is_password_strong(password: str) -> bool:
+    if len(password) < 8: return False
+    if not any(c.islower() for c in password): return False
+    if not any(c.isupper() for c in password): return False
+    # Matches frontend: Special character or digit
+    if not any(c.isdigit() or not c.isalnum() for c in password): return False
+    return True
+
 @app.post("/register")
 def register(request: AuthRequest):
+    if not is_password_strong(request.password):
+        raise HTTPException(status_code=400, detail="Password does not meet complexity requirements")
+
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM users WHERE username = ?", (request.username,))
@@ -291,7 +280,11 @@ def login(request: AuthRequest):
     return {"access_token": user["id"], "token_type": "bearer", "username": user["username"]}
 
 @app.post("/library/add/{game_id}")
-def add_to_library(game_id: int, current_user_id: Optional[int] = Depends(get_current_user_id)):
+async def add_to_library(
+    game_id: int, 
+    background_tasks: BackgroundTasks, 
+    current_user_id: Optional[int] = Depends(get_current_user_id)
+):
     if current_user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     
@@ -305,10 +298,24 @@ def add_to_library(game_id: int, current_user_id: Optional[int] = Depends(get_cu
     cursor.execute("INSERT INTO library_items (user_id, game_id) VALUES (?, ?)", (current_user_id, game_id))
     conn.commit()
     conn.close()
+
+    # Clear memory cache to force a fresh pull from updated DB/Algorithm
+    GLOBAL_DATA_CACHE.pop(f"lib_full_{current_user_id}", None)
+    GLOBAL_DATA_CACHE.pop(f"recs_{current_user_id}", None)
+    
+    # Proactively warm up the full caches in the background
+    # This ensures the "Quick Render" works when the user clicks the section
+    background_tasks.add_task(get_user_library, current_user_id)
+    background_tasks.add_task(get_recommendations, current_user_id)
+
     return {"message": "Added to library"}
 
 @app.delete("/library/remove/{game_id}")
-def remove_from_library(game_id: int, current_user_id: Optional[int] = Depends(get_current_user_id)):
+async def remove_from_library(
+    game_id: int, 
+    background_tasks: BackgroundTasks,
+    current_user_id: Optional[int] = Depends(get_current_user_id)
+):
     if current_user_id is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     
@@ -317,7 +324,35 @@ def remove_from_library(game_id: int, current_user_id: Optional[int] = Depends(g
     cursor.execute("DELETE FROM library_items WHERE user_id = ? AND game_id = ?", (current_user_id, game_id))
     conn.commit()
     conn.close()
+
+    # Invalidate and warm up recommendations based on the new library state
+    GLOBAL_DATA_CACHE.pop(f"lib_full_{current_user_id}", None)
+    GLOBAL_DATA_CACHE.pop(f"recs_{current_user_id}", None)
+    background_tasks.add_task(get_user_library, current_user_id)
+    background_tasks.add_task(get_recommendations, current_user_id)
+
     return {"message": "Removed from library"}
+
+def fetch_and_cache_game_details(game_ids: List[int], category: str):
+    """Internal helper to ensure game metadata is saved in the DB for quick rendering."""
+    if not game_ids: return []
+    token = get_access_token()
+    if not token: return []
+    url = "https://api.igdb.com/v4/games"
+    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+    ids_str = ",".join(map(str, game_ids))
+    query = f"fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; where id = ({ids_str}); limit 100;"
+    try:
+        response = requests.post(url, headers=headers, data=query)
+        res = process_game_data(response.json())
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        for game in res:
+            cursor.execute("INSERT OR REPLACE INTO cached_games (game_id, category, game_json) VALUES (?, ?, ?)", (game["id"], category, json.dumps(game)))
+        conn.commit()
+        conn.close()
+        return res
+    except Exception: return []
 
 @app.get("/library/ids")
 def get_library_ids(current_user_id: Optional[int] = Depends(get_current_user_id)):
@@ -335,65 +370,140 @@ def get_user_library(current_user_id: Optional[int] = Depends(get_current_user_i
     if current_user_id is None:
         return []
     
+    # 1. Try memory cache (Instant)
+    cache_key = f"lib_full_{current_user_id}"
+    cached = get_cached_data(cache_key)
+    if cached: return cached
+
     conn = get_db_connection()
     cursor = conn.cursor()
+    # 2. Get User's Library IDs
     cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
-    items = cursor.fetchall()
-    conn.close()
-    
-    game_ids = [item["game_id"] for item in items]
-    
+    game_ids = [item["game_id"] for item in cursor.fetchall()]
+
     if not game_ids:
+        conn.close()
         return []
 
-    token = get_access_token()
-    url = "https://api.igdb.com/v4/games"
-    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    query = f'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where id = ({",".join(map(str, game_ids))});'
+    # 3. Quick Render: Try fetching metadata from the DB cached_games table
+    placeholders = ",".join("?" for _ in game_ids)
+    cursor.execute(f"SELECT game_json FROM cached_games WHERE game_id IN ({placeholders}) GROUP BY game_id", game_ids)
+    db_rows = cursor.fetchall()
+    conn.close()
+
+    res = [json.loads(row["game_json"]) for row in db_rows]
+    cached_ids = {g["id"] for g in res}
+    missing_ids = [gid for gid in game_ids if gid not in cached_ids]
+
+    # 4. Fallback: If metadata is missing for new items, fetch from IGDB
+    if missing_ids:
+        fetched_data = fetch_and_cache_game_details(missing_ids, 'library')
+        res.extend(fetched_data)
     
-    try:
-        response = requests.post(url, headers=headers, data=query)
-        return process_game_data(response.json())
-    except Exception:
-        return []
+    set_cached_data(cache_key, res)
+    return res
 
 @app.get("/recommendations")
 def get_recommendations(current_user_id: Optional[int] = Depends(get_current_user_id)):
+    if current_user_id is None:
+        return []
+
+    # Try to get from server-side cache
+    cache_key = f"recs_{current_user_id}"
+    cached = get_cached_data(cache_key)
+    if cached: return cached
+
     token = get_access_token()
     if not token:
         raise HTTPException(status_code=500, detail="Authentication failed.")
 
-    url = "https://api.igdb.com/v4/games"
-    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
+    user_library_ids = [item["game_id"] for item in cursor.fetchall()]
+    conn.close()
 
-    user_library_ids = []
-    if current_user_id:
+    if not user_library_ids:
+        return []
+
+    try:
+        url = "https://api.igdb.com/v4/games"
+        headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
+        
+        # Use DB metadata to quickly identify genres for the recommendation logic
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT game_id FROM library_items WHERE user_id = ?", (current_user_id,))
-        items = cursor.fetchall()
+        placeholders = ",".join("?" for _ in user_library_ids)
+        cursor.execute(f"SELECT game_json FROM cached_games WHERE game_id IN ({placeholders}) GROUP BY game_id", user_library_ids)
+        lib_data = [json.loads(row["game_json"]) for row in cursor.fetchall()]
         conn.close()
-        user_library_ids = [item["game_id"] for item in items]
-
-    if user_library_ids:
-        try:
-            library_query = f'fields genres; where id = ({",".join(map(str, user_library_ids))});'
-            lib_res = requests.post(url, headers=headers, data=library_query)
-            lib_data = lib_res.json()
+        
+        unique_main_genres = set()
+        for game in lib_data:
+            genres = game.get('genres', [])
+            if not genres: continue
             
-            genres = list(set([g for game in lib_data for g in game.get('genres', [])]))
-            if genres:
-                rec_query = f'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where genres = ({",".join(map(str, genres[:3]))}) & total_rating > 80; sort total_rating desc; limit 16;'
-                response = requests.post(url, headers=headers, data=rec_query)
-                data = response.json()
-                if data: return process_game_data(data)
-        except Exception:
-            pass
+            best_genre = None
+            min_prio = len(GENRE_PRIORITY)
+            for g in genres:
+                name = g.get('name', "")
+                prio = GENRE_PRIORITY.index(name) if name in GENRE_PRIORITY else len(GENRE_PRIORITY)
+                if prio < min_prio:
+                    min_prio = prio
+                    best_genre = g
+            
+            target = best_genre if best_genre else genres[0]
+            gid = target.get('id') if isinstance(target, dict) else target
+            if gid:
+                unique_main_genres.add(gid)
 
-    # Fallback for guest or empty library
-    fallback_query = 'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; where total_rating > 85; sort total_rating desc; limit 16;'
-    response = requests.post(url, headers=headers, data=fallback_query)
-    return process_game_data(response.json())
+        if not unique_main_genres:
+            return []
+
+        ids_str = ",".join(map(str, user_library_ids))
+        genre_filter = ",".join(map(str, unique_main_genres))
+        rec_query = (
+            f"fields name, summary, total_rating, total_rating_count, first_release_date, "
+            f"cover.url, platforms.name, platforms.abbreviation, genres.name, "
+            f"screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; "
+            f"where genres = ({genre_filter}) & id != ({ids_str}) & cover != null & "
+            f"total_rating_count > 200; "
+            f"limit 500;"
+        )
+        
+        response = requests.post(url, headers=headers, data=rec_query)
+        raw_games = response.json()
+        if not raw_games:
+            return []
+
+        filtered_games = []
+        for game in raw_games:
+            game_genres = game.get('genres', [])
+            if not game_genres: continue
+            
+            current_best_genre = None
+            current_min_prio = len(GENRE_PRIORITY)
+            for g in game_genres:
+                name = g.get('name', "")
+                prio = GENRE_PRIORITY.index(name) if name in GENRE_PRIORITY else len(GENRE_PRIORITY)
+                if prio < current_min_prio:
+                    current_min_prio = prio
+                    current_best_genre = g
+            
+            final_main_genre = current_best_genre if current_best_genre else game_genres[0]
+            main_gid = final_main_genre.get('id') if isinstance(final_main_genre, dict) else final_main_genre
+            
+            if main_gid in unique_main_genres:
+                filtered_games.append(game)
+
+        filtered_games.sort(key=calculate_top_100, reverse=True)
+        res = process_game_data(filtered_games[:100])
+        set_cached_data(cache_key, res)
+        return res
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return []
 
 @app.get("/search/{game_name}")
 def search_game(game_name: str):
@@ -404,7 +514,7 @@ def search_game(game_name: str):
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
     # Increased limit to 100 to support frontend pagination (16 per page)
-    query = f'fields name, summary, total_rating, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id; search "{game_name}"; limit 100;'
+    query = f'fields name, summary, total_rating, total_rating_count, first_release_date, cover.url, platforms.name, platforms.abbreviation, genres.name, screenshots.url, videos.video_id, involved_companies.developer, involved_companies.company.name; search "{game_name}"; limit 100;'
 
     try:
         response = requests.post(url, headers=headers, data=query)
@@ -416,59 +526,34 @@ def search_game(game_name: str):
 
 @app.get("/category/{cat_id}")
 def get_games_by_category(cat_id: str):
-    token = get_access_token()
-    if not token:
-        raise HTTPException(status_code=500, detail="Authentication failed.")
-
-    url = "https://api.igdb.com/v4/games"
-    headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    current_time = int(time.time())
-
-    base_fields = (
-        "fields name, summary, total_rating, total_rating_count, first_release_date, "
-        "cover.url, platforms.name, platforms.abbreviation, genres.name, "
-        "screenshots.url, videos.video_id;"
-    )
-
-    if cat_id == "new-releases":
-        filters = f"where first_release_date <= {current_time} & first_release_date > 0 & cover != null;"
-        sorting = "sort first_release_date desc;"
-
-    elif cat_id == "top":
-        filters = f"where version_parent = null & total_rating_count > 200 & total_rating > 80 & cover != null;"
-        sorting = "sort total_rating desc;"
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    elif cat_id == "trends":
-        filters = f"where version_parent = null & hypes > 10 & first_release_date > {int(time.time()) - (180 * 24 * 60 * 60)} & cover != null;"
-        sorting = "sort hypes desc;"
-    
-    elif cat_id == "upcoming":
-        filters = f"where first_release_date > {current_time} & version_parent = null & cover != null;"
-        sorting = "sort first_release_date asc;"
-    
-    else:
-        raise HTTPException(status_code=404, detail="Category not found")
-
-
-    query = f"{base_fields} {filters} {sorting} limit 100;"
-
     try:
-        response = requests.post(url, headers=headers, data=query)
-        response.raise_for_status()
-        data = response.json()
-        with open("debug_data.json", "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        cursor.execute("SELECT game_json FROM cached_games WHERE category = ?", (cat_id,))
+        rows = cursor.fetchall()
         
-        if cat_id == "top" and data:
-            print(f"Top Game #1: {data[0].get('name')}")
-            data.sort(key=calculate_top_100, reverse=True)
-            return process_game_data(data[:100])
-        
+        if not rows:
+            # If DB is empty for this category, try to fetch it once immediately
+            conn.close()
+            fetch_and_store_category(cat_id)
+            # Re-open connection to get newly fetched data
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT game_json FROM cached_games WHERE category = ?", (cat_id,))
+            rows = cursor.fetchall()
 
-        return process_game_data(data)
-    except Exception as e:
-        print(f"Error fetching category {cat_id}: {e}")
-        return []
+        games = [json.loads(row["game_json"]) for row in rows]
+        
+        # Sort logic for specific categories
+        if cat_id == "top":
+            games.sort(key=calculate_top_100, reverse=True)
+        elif cat_id == "new-releases":
+            games.sort(key=lambda x: x.get('first_release_date', 0), reverse=True)
+            
+        return games[:100] # Return the requested amount to the frontend
+    finally:
+        conn.close()
 
 def calculate_top_100(game):
     rating = game.get('total_rating', 0)
@@ -479,17 +564,12 @@ def calculate_top_100(game):
 
     return rating * (math.log(count) ** 0.4)
 
-def calculate_trending_games(game):
-    rating = game.get('total_rating')
-    if rating is None:
-        rating = 75
-        
-    popularity = game.get('popularity', 0)
-    final_score = rating * math.log10(popularity + 1)
-    return final_score
-
-# Global instance to ensure lru_cache persists across requests
-global_price_service = GamePriceService(CLIENT_ID, CLIENT_SECRET, ITAD_API_KEY)
+def get_genre_priority(g):
+    name = g.get('name') if isinstance(g, dict) else ""
+    try:
+        return GENRE_PRIORITY.index(name)
+    except ValueError:
+        return len(GENRE_PRIORITY) # Non-priority genres go to the end
 
 def process_game_data(data):
     if not isinstance(data, list):
@@ -498,6 +578,10 @@ def process_game_data(data):
         
     # Process Metadata (Visuals, Ratings, Dates) only
     for game in data:
+        # Reorder genres based on priority list. Higher priority genres move to index 0.
+        if "genres" in game and isinstance(game["genres"], list) and len(game["genres"]) > 0:
+            game["genres"].sort(key=get_genre_priority)
+
         if "cover" in game:
             game["cover_url"] = "https:" + game["cover"]["url"].replace("t_thumb", "t_cover_big")
         else:
@@ -521,9 +605,5 @@ def process_game_data(data):
             game["release_date_formatted"] = dt_object.strftime("%B %d, %Y")
         else:
             game["release_date_formatted"] = "TBA"
-
-        # Set default price fields (to be filled by frontend)
-        game["price"] = "N/A"
-        game["all_prices"] = {"PC": "N/A", "PlayStation": "N/A", "Xbox": "N/A"}
 
     return data
